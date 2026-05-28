@@ -1,66 +1,91 @@
-/* css/tokens.css, source de vérité visuelle */
-/* Concept : l'aube. Du profond au lumineux. */
+/* css/tokens.css
+   Concept : la lumière qui se lève.
+   Palette brun chaud + ambre. Jamais froid, jamais générique.
+   Toute valeur définie ici est la source de vérité.
+   Ne pas coder de couleur en dur dans les autres fichiers. */
 
 :root {
+
   /* Fonds */
-  --bg:           #0b0f0d;
-  --bg-grad:      radial-gradient(ellipse 140% 70% at 50% -5%,
-                    #111a14 0%, #0b0f0d 65%);
-  --surface:      #141918;
-  --surface-hi:   #1a211e;
-  --surface-glow: #1f2d26;
+  --bg:           #0f0d0b;
+  --bg-grad:      radial-gradient(ellipse 160% 80% at 50% -10%,
+                    #1a1510 0%, #0f0d0b 60%);
+  --surface:      #181410;
+  --surface-hi:   #221c16;
+  --surface-glow: #2a2018;
+
+  /* Variables de session, interpolées dynamiquement par JS. */
+  --bg-session:   #0f0d0b;
+  --glow-session: transparent;
 
   /* Bordures */
-  --border:       #232e28;
-  --border-hi:    #2e3d35;
+  --border:       #2e2418;
+  --border-hi:    #4a3820;
+  --border-focus: #8a6030;
 
-  /* Accent principal, vert aube */
-  --accent:       #6eeea8;
-  --accent-dk:    #1a4a30;
-  --accent-md:    #286e48;
-  --accent-glow:  rgba(110, 238, 168, 0.12);
+  /* Accent ambre, la lumière du matin */
+  --amber:        #e8c87a;
+  --amber-mid:    #c4a55a;
+  --amber-dk:     #3d2e0f;
+  --amber-glow:   rgba(232, 180, 80, 0.12);
 
-  /* Secondaires */
-  --amber:        #f0c070;
-  --amber-dk:     #3d2e0a;
-  --blue:         #70b8f0;
-  --red-soft:     #e07070;
+  /* Accent vert, confirmation et réussite */
+  --green:        #7de0a0;
+  --green-mid:    #2d7a52;
+  --green-dk:     #1e4a30;
+  --green-glow:   rgba(125, 224, 160, 0.10);
 
   /* Texte */
-  --text:         #f0f5f1;
-  --text-mid:     #8aaa92;
-  --text-dim:     #4a5e52;
+  --text:         #f2ead8;
+  --text-mid:     #a09070;
+  --text-dim:     #6a5a46;
 
   /* Statuts */
-  --status-ok:    #6eeea8;
-  --status-early: #70b8f0;
-  --status-late:  #f0a070;
+  --status-ok:    #7de0a0;
+  --status-early: #7ab8e8;
+  --status-late:  #e8905a;
+  --status-amber: #e8c87a;
 
   /* Typographie */
   --font-display: 'Fraunces', serif;
   --font-body:    'Outfit', sans-serif;
+  --font-accessible: 'Atkinson Hyperlegible', sans-serif;
 
   /* Espacements */
   --space-xs:  6px;
   --space-sm:  12px;
-  --space-md:  20px;
-  --space-lg:  32px;
-  --space-xl:  48px;
+  --space-md:  22px;
+  --space-lg:  34px;
+  --space-xl:  52px;
 
   /* Rayons */
   --radius-sm: 12px;
   --radius-md: 18px;
   --radius-lg: 26px;
-  --radius-xl: 36px;
+  --radius-xl: 38px;
 
   /* Transitions */
-  --ease-out:   cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-soft:  cubic-bezier(0.4, 0, 0.2, 1);
-  --dur-fast:   150ms;
-  --dur-mid:    350ms;
-  --dur-slow:   600ms;
+  --ease-out:      cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-soft:     cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring:   cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-instant:   100ms;
+  --dur-fast:      180ms;
+  --dur-mid:       380ms;
+  --dur-slow:      650ms;
+  --dur-crawl:     1200ms;
 
   /* Ombres */
-  --shadow-card: 0 2px 24px rgba(0,0,0,0.35);
-  --shadow-glow: 0 0 40px rgba(110,238,168,0.10);
+  --shadow-card:   0 2px 20px rgba(0,0,0,0.4),
+                   0 1px 4px rgba(0,0,0,0.3);
+  --shadow-amber:  0 8px 32px rgba(232,180,80,0.18);
+  --shadow-green:  0 8px 32px rgba(125,224,160,0.16);
+}
+
+/* Mode lecture confortable */
+.readable {
+  --font-display: 'Atkinson Hyperlegible', sans-serif;
+}
+.readable .t-display,
+.readable .t-step {
+  font-style: normal;
 }

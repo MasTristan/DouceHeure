@@ -155,7 +155,7 @@ function showPreview(prefill) {
       const learned = s.confidence > 0 && s.real && s.real.length >= 2
         ? el('div', { class: 'timeline-item__learned' }, UI.preview_learned(s.dur))
         : null;
-      return el('div', { class: 'timeline-item' + (isLeave ? ' is-leave' : '') }, [
+      return el('div', { class: 'timeline-item' + (isLeave ? ' timeline-item--leave' : '') }, [
         el('div', { class: 'timeline-item__time' }, fromMin(s.at)),
         el('div', { class: 'timeline-item__emoji' }, s.emoji || ''),
         el('div', { class: 'timeline-item__label' }, [
@@ -203,7 +203,7 @@ function showPreview(prefill) {
       el('div', { style: 'display:flex; flex-direction:column; gap:8px' }, timeline),
 
       el('div', { class: 'spacer-md' }),
-      el('div', { class: 'callout callout--accent' }, [
+      el('div', { class: 'callout callout--amber' }, [
         el('div', { class: 'callout__icon' }, '🛡️'),
         el('div', { class: 'callout__text' }, UI.preview_margin_notice),
       ]),
@@ -242,6 +242,7 @@ function startLive(plan) {
   };
   wake.acquire();
   wake.bindVisibility();
+  updateSessionProgress(0);
   audio.cue(live.sequence[0].key);
   renderLive();
   liveTicker = setInterval(renderLive, 5000);
@@ -282,11 +283,14 @@ function confirmNext() {
     return endLive();
   }
 
-  // Animation de souffle : 500ms avant le render de la nouvelle étape.
+  // Onde lumineuse sur le bouton, arrêt de la respiration de l'emoji.
   const btn = document.querySelector('.btn--confirm');
   const emoji = document.querySelector('.step-emoji');
-  if (btn) btn.classList.add('is-releasing');
-  if (emoji) emoji.classList.add('is-done');
+  if (btn) {
+    btn.classList.remove('state-suggested', 'state-idle');
+    btn.classList.add('state-releasing');
+  }
+  if (emoji) emoji.classList.add('state-done');
 
   setTimeout(() => {
     if (!live) return;
@@ -295,9 +299,36 @@ function confirmNext() {
     live.nudged = false;
     live.suggestedAnnounced = false;
     live.currentSlipMsg = null;
+    updateSessionProgress(live.current / Math.max(1, live.sequence.length - 1));
     audio.cue(live.sequence[live.current].key);
     renderLive();
-  }, 500);
+  }, 450);
+}
+
+// Progression imperceptible du fond pendant la session.
+// progress : 0 (réveil) vers 1 (départ). Jamais perceptible en temps réel.
+function updateSessionProgress(progress) {
+  const root = document.documentElement;
+  const rStart = 15, gStart = 13, bStart = 11;
+  const rEnd   = 18, gEnd   = 15, bEnd   = 8;
+  const r = Math.round(rStart + (rEnd - rStart) * progress);
+  const g = Math.round(gStart + (gEnd - gStart) * progress);
+  const b = Math.round(bStart + (bEnd - bStart) * progress);
+  root.style.setProperty('--bg-session', `rgb(${r},${g},${b})`);
+
+  const glowAlpha = Math.max(0, (progress - 0.6) / 0.4) * 0.05;
+  root.style.setProperty('--glow-session',
+    `rgba(232,180,80,${glowAlpha.toFixed(3)})`);
+
+  const breathDur = 5.5 - (5.5 - 4.2) * progress;
+  document.querySelector('.step-emoji')
+    ?.style.setProperty('--breath-dur', `${breathDur.toFixed(1)}s`);
+}
+
+function resetSessionProgress() {
+  const root = document.documentElement;
+  root.style.removeProperty('--bg-session');
+  root.style.removeProperty('--glow-session');
 }
 
 function renderLive() {
@@ -331,7 +362,7 @@ function renderLive() {
   }
 
   const progressFill = el('div', {
-    class: 'progress-fill' + (nudge ? ' is-overrun' : ''),
+    class: 'progress-fill' + (nudge ? ' state-overrun' : ''),
     style: `width: ${Math.min(progress, 1) * 100}%`,
   });
 
@@ -339,9 +370,12 @@ function renderLive() {
   const isNewStep = live.lastRenderedStep !== live.current;
   live.lastRenderedStep = live.current;
 
-  const stepCard = el('div', {
-    class: 'step-card' + (suggested ? ' is-suggested' : '') + (isNewStep ? ' is-new' : ''),
-  }, [
+  const stepCardClasses = ['step-card'];
+  if (suggested) stepCardClasses.push('state-suggested');
+  if (nudge) stepCardClasses.push('state-nudge');
+  if (isNewStep) stepCardClasses.push('is-new');
+
+  const stepCard = el('div', { class: stepCardClasses.join(' ') }, [
     el('div', { class: 'step-emoji' }, step.emoji || ''),
     el('h1', { class: 't-step' }, step.label),
     el('p', { class: 't-body', style: 'margin-top: 16px' }, live.stepMessage),
@@ -360,7 +394,7 @@ function renderLive() {
       `${UI.live_next_prefix} ${next.emoji || ''} ${next.label}`) : null,
 
     nudge ? el('div', { class: 'spacer-md' }) : null,
-    nudge ? el('div', { class: 'callout callout--accent' }, [
+    nudge ? el('div', { class: 'callout callout--amber' }, [
       el('div', { class: 'callout__icon' }, '🤲'),
       el('div', { class: 'callout__text' }, pick('nudge')),
     ]) : null,
@@ -374,7 +408,7 @@ function renderLive() {
     el('div', { style: 'flex: 1' }),
 
     el('button', {
-      class: 'btn btn--confirm ' + (suggested ? 'is-suggested' : 'is-idle'),
+      class: 'btn btn--confirm ' + (suggested ? 'state-suggested' : 'state-idle'),
       onclick: confirmNext,
     }, btnText),
     el('div', { class: 'spacer-sm' }),
@@ -407,11 +441,16 @@ function renderLeave(slip) {
 
   const leaveMsg = pick('leave');
 
-  const halo = el('div', { class: 'card card--accent leave-halo' }, [
-    el('div', { class: 'leave-ring', style: 'width: 96px; height: 96px; border-radius: 50%; margin: 0 auto' }, [
-      el('div', { class: 'step-emoji', style: 'margin: 0; font-size: 64px' }, '🌅'),
+  // L'animation du halo joue une seule fois à l'arrivée sur l'écran.
+  const isNewLeave = !live.leaveRendered;
+  live.leaveRendered = true;
+
+  const halo = el('div', { class: 'leave-card' + (isNewLeave ? ' is-new' : '') }, [
+    el('div', { class: 'leave-icon-wrap' }, [
+      el('div', { class: 'leave-ring' }),
+      el('div', { class: 'leave-ring' }),
+      el('div', { class: 'leave-icon-bg' }, '🌅'),
     ]),
-    el('div', { class: 'spacer-md' }),
     el('h1', { class: 't-display', style: 'text-align:center' }, UI.leave_title),
     el('p', { class: 't-body', style: 'margin-top: 14px; text-align:center' }, leaveMsg),
     el('div', { class: 'spacer-sm' }),
@@ -435,6 +474,7 @@ function renderLeave(slip) {
 function endLive() {
   clearInterval(liveTicker); liveTicker = null;
   wake.release();
+  resetSessionProgress();
   const measurements = live.measurements;
   const ctx = live.ctx;
   live = null;
@@ -444,6 +484,7 @@ function endLive() {
 function abortLive() {
   clearInterval(liveTicker); liveTicker = null;
   wake.release();
+  resetSessionProgress();
   live = null;
   showHome();
 }
@@ -567,7 +608,7 @@ function showInsight() {
     ]),
 
     el('div', { class: 'spacer-md' }),
-    el('div', { class: 'callout callout--accent' }, [
+    el('div', { class: 'callout callout--amber' }, [
       el('div', { class: 'callout__icon' }, '🔒'),
       el('div', { class: 'callout__text' }, UI.insight_learned_privacy),
     ]),
@@ -700,7 +741,7 @@ function showSocial() {
     ]),
     el('div', { class: 'spacer-md' }),
 
-    el('div', { class: 'callout callout--accent' }, [
+    el('div', { class: 'callout callout--amber' }, [
       el('div', { class: 'callout__icon' }, '🤝'),
       el('div', { class: 'callout__text' }, UI.social_guardrail),
     ]),
