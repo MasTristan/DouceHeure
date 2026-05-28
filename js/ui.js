@@ -14,6 +14,9 @@ const root = document.getElementById('app');
 let live = null;
 let liveTicker = null;
 
+// Suivi de l'écran courant pour ne jouer l'animation d'entrée qu'une fois.
+let currentScreen = null;
+
 function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -61,7 +64,13 @@ function toast(title, body, emoji) {
   }, 2400);
 }
 
-function render(node) {
+function render(node, screenKey) {
+  // Animation d'entrée seulement quand on change vraiment d'écran,
+  // pas à chaque re-render interne (input, toggle, ticker live).
+  if (screenKey && screenKey !== currentScreen) {
+    node.classList.add('screen--enter');
+    currentScreen = screenKey;
+  }
   root.replaceChildren(node);
 }
 
@@ -106,7 +115,7 @@ export function showHome() {
   );
 
   const screen = el('main', { class: 'screen stagger' }, children);
-  render(screen);
+  render(screen, 'home');
 }
 
 // ECRAN PREVIEW
@@ -170,7 +179,7 @@ function showPreview(prefill) {
           class: 'time-input',
           type: 'time',
           value: data.arrival,
-          oninput: (e) => { data.arrival = e.target.value || '09:00'; render2(); },
+          onchange: (e) => { data.arrival = e.target.value || '09:00'; render2(); },
         }),
         el('div', { class: 'spacer-md' }),
         el('div', { class: 't-label' }, UI.preview_transport_label),
@@ -184,7 +193,7 @@ function showPreview(prefill) {
           type: 'number',
           min: '0', max: '180',
           value: String(data.travel),
-          oninput: (e) => { data.travel = Number(e.target.value) || 0; render2(); },
+          onchange: (e) => { data.travel = Number(e.target.value) || 0; render2(); },
         }),
       ]),
 
@@ -209,7 +218,7 @@ function showPreview(prefill) {
       el('div', { class: 'spacer-sm' }),
       el('button', { class: 'btn btn--ghost', onclick: showHome }, UI.preview_back),
     ]);
-    render(screen);
+    render(screen, 'preview');
   }
 
   render2();
@@ -326,8 +335,12 @@ function renderLive() {
     style: `width: ${Math.min(progress, 1) * 100}%`,
   });
 
+  // is-new : animation d'entrée du step-card uniquement à la prise de fonction.
+  const isNewStep = live.lastRenderedStep !== live.current;
+  live.lastRenderedStep = live.current;
+
   const stepCard = el('div', {
-    class: 'step-card' + (suggested ? ' is-suggested' : ''),
+    class: 'step-card' + (suggested ? ' is-suggested' : '') + (isNewStep ? ' is-new' : ''),
   }, [
     el('div', { class: 'step-emoji' }, step.emoji || ''),
     el('h1', { class: 't-step' }, step.label),
@@ -372,7 +385,7 @@ function renderLive() {
     el('div', { class: 'spacer-sm' }),
     el('button', { class: 'btn btn--ghost', onclick: abortLive }, UI.live_quit),
   ]);
-  render(screen);
+  render(screen, 'live');
 
   if (suggested && !live.suggestedAnnounced && next) {
     live.suggestedAnnounced = true;
@@ -416,7 +429,7 @@ function renderLeave(slip) {
     el('div', { class: 'spacer-sm' }),
     el('button', { class: 'btn btn--ghost', onclick: abortLive }, UI.live_quit),
   ]);
-  render(screen);
+  render(screen, 'live');
 }
 
 function endLive() {
@@ -487,7 +500,7 @@ function showFeedback(measurements, ctx) {
         onclick: submit,
       }, selected ? UI.feedback_cta_ready : UI.feedback_cta_idle),
     ]);
-    render(screen);
+    render(screen, 'feedback');
   }
 
   renderF();
@@ -562,7 +575,7 @@ function showInsight() {
     el('div', { class: 'spacer-md' }),
     el('button', { class: 'btn btn--primary', onclick: showHome }, UI.insight_back),
   ]);
-  render(screen);
+  render(screen, 'insight');
 }
 
 // ECRAN ROUTINE
@@ -656,7 +669,7 @@ function showRoutine() {
       el('div', { class: 'spacer-sm' }),
       el('button', { class: 'btn btn--ghost', onclick: showHome }, UI.routine_back),
     ]);
-    render(screen);
+    render(screen, 'routine');
   }
 
   renderR();
@@ -695,5 +708,5 @@ function showSocial() {
     el('div', { style: 'flex: 1' }),
     el('button', { class: 'btn btn--ghost', onclick: showHome }, UI.social_back),
   ]);
-  render(screen);
+  render(screen, 'social');
 }
