@@ -1,0 +1,13 @@
+:root {
+  --bg:        #0d1014;   --surface:   #161b20;
+  --surface-hi:#1c232a;   --border:    #272f38;
+  --border-hi: #37424e;   --accent:    #62e6a4;
+  --accent-dk: #1f4d38;   --accent-md: #2d7a56;
+  --amber:     #e8b25c;   --blue:      #5c9de8;
+  --text:      #eef3ef;   --text-mid:  #8a9d91;
+  --text-dim:  #4a5a50;
+  --ok:#62e6a4; --early:#5c9de8; --late:#e8915c;
+  --font-display:'Fraunces',serif;
+  --font-body:'Outfit',sans-serif;
+  --radius:16px; --radius-lg:24px;
+}

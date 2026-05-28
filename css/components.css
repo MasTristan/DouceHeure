@@ -1,0 +1,60 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 20px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-weight: 500;
+  font-size: 17px;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+.btn:active { transform: scale(0.98); }
+.btn-primary {
+  background: var(--accent);
+  color: #0d1014;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.btn-ghost { background: transparent; border-color: var(--border); color: var(--text-mid); }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+.card-hi { background: var(--surface-hi); border-color: var(--border-hi); }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  color: var(--text-mid);
+  background: var(--surface-hi);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  background: var(--surface-hi);
+  color: var(--text);
+  border: 1px solid var(--border-hi);
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  font-size: 15px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+.toast.show { opacity: 1; }
