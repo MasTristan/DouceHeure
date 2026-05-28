@@ -1,11 +1,12 @@
 // Rendu des écrans et navigation. Pas de calcul métier ici.
 
 import { loadState, saveState } from './store.js';
-import { toMin, fromMin } from './time.js';
+import { fromMin } from './time.js';
 import { buildPlan, TRANSPORT_BUFFER } from './plan.js';
 import { onFeedback } from './predict.js';
 import * as audio from './audio.js';
 import * as wake from './wakelock.js';
+import { pick, UI } from './copy.js';
 
 const root = document.getElementById('app');
 
@@ -22,8 +23,10 @@ function el(tag, attrs = {}, children = []) {
     else if (v !== undefined && v !== null) node.setAttribute(k, v);
   }
   for (const c of [].concat(children)) {
-    if (c == null) continue;
-    node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    if (c == null || c === false) continue;
+    node.appendChild(typeof c === 'string' || typeof c === 'number'
+      ? document.createTextNode(String(c))
+      : c);
   }
   return node;
 }
@@ -31,59 +34,82 @@ function el(tag, attrs = {}, children = []) {
 function ctxNow() {
   const d = new Date();
   const day = d.getDay();
-  // type 'work' lundi à vendredi, 'other' sinon (heuristique simple).
   const type = day >= 1 && day <= 5 ? 'work' : 'other';
   return { day, type };
 }
 
-function toast(msg) {
-  const t = el('div', { class: 'toast show' }, msg);
+function wordmark() {
+  return el('div', { class: 'wordmark' }, [
+    el('span', { class: 'wordmark__dot' }),
+    el('span', { class: 'wordmark__name' }, UI.wordmark),
+  ]);
+}
+
+function toast(title, body, emoji) {
+  const t = el('div', { class: 'toast' }, [
+    emoji ? el('div', { class: 'toast__emoji' }, emoji) : null,
+    el('div', {}, [
+      el('div', { class: 'toast__title' }, title),
+      body ? el('div', { class: 'toast__body' }, body) : null,
+    ]),
+  ]);
   document.body.appendChild(t);
-  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 220); }, 2400);
+  setTimeout(() => {
+    t.style.transition = 'opacity 220ms';
+    t.style.opacity = '0';
+    setTimeout(() => t.remove(), 240);
+  }, 2400);
 }
 
 function render(node) {
   root.replaceChildren(node);
 }
 
-// ---------- ÉCRAN HOME ----------
+// ECRAN HOME
 
 export function showHome() {
   const state = loadState();
   const ctx = ctxNow();
   const routineToday = state.routine && state.routine.days.includes(ctx.day) ? state.routine : null;
 
-  const hello = state.name ? `Bonjour ${state.name}` : 'Bonjour';
+  const title = state.name ? UI.home_title_with_name(state.name) : UI.home_title_anon;
 
-  const screen = el('main', { class: 'screen screen-home' }, [
-    el('header', { class: 'home-header' }, [
-      el('p', { class: 'eyebrow' }, hello),
-      el('h1', { class: 'display' }, 'Douce heure')
-    ]),
-    el('section', { class: 'home-empty' }, [
-      el('p', { class: 'lead' }, 'Prépare un départ tranquille, à ton rythme.')
-    ]),
-    routineToday ? el('div', { class: 'card card-hi' }, [
-      el('p', { class: 'eyebrow' }, 'Ton départ habituel'),
-      el('p', { class: 'lead', style: 'margin-top:6px' }, `Arrivée à ${routineToday.arrival}`),
-      el('div', { style: 'display:flex; gap:10px; margin-top:14px' }, [
+  const children = [
+    wordmark(),
+    el('div', { class: 'spacer-lg' }),
+    el('h1', { class: 't-display t-display--lg' }, title),
+    el('div', { class: 'spacer-lg' }),
+  ];
+
+  if (routineToday) {
+    children.push(
+      el('div', { class: 'card card--accent' }, [
+        el('div', { class: 't-label' }, UI.home_routine_label),
+        el('div', { class: 'spacer-sm' }),
+        el('div', { class: 't-body' }, UI.home_routine_sub),
+        el('div', { class: 'spacer-md' }),
         el('button', {
-          class: 'btn btn-primary',
-          style: 'flex:1',
-          onclick: () => showPreview(routineToday)
-        }, 'Lancer ce départ')
-      ])
-    ]) : null,
-    el('div', { style: 'display:flex; flex-direction:column; gap:12px' }, [
-      el('button', { class: 'btn btn-primary', onclick: () => showPreview(null) }, 'Préparer un départ'),
-      el('button', { class: 'btn', onclick: showRoutine }, 'Mon rituel'),
-      el('button', { class: 'btn btn-ghost', onclick: showSocial }, 'Mes proches')
-    ])
-  ]);
+          class: 'btn btn--primary',
+          onclick: () => showPreview(routineToday),
+        }, UI.home_routine_cta),
+      ]),
+      el('div', { class: 'spacer-md' }),
+    );
+  }
+
+  children.push(
+    el('button', { class: 'btn btn--primary', onclick: () => showPreview(null) }, UI.home_cta),
+    el('div', { class: 'spacer-sm' }),
+    el('button', { class: 'btn btn--soft', onclick: showRoutine }, UI.home_routine_link),
+    el('div', { class: 'spacer-sm' }),
+    el('button', { class: 'btn btn--ghost', onclick: showSocial }, UI.home_social_link),
+  );
+
+  const screen = el('main', { class: 'screen stagger' }, children);
   render(screen);
 }
 
-// ---------- ÉCRAN PREVIEW ----------
+// ECRAN PREVIEW
 
 function showPreview(prefill) {
   const state = loadState();
@@ -92,74 +118,96 @@ function showPreview(prefill) {
   const data = {
     arrival: prefill?.arrival || '09:00',
     transport: prefill?.transport || 'walk',
-    travel: prefill?.travel ?? 20
+    travel: prefill?.travel ?? 20,
   };
 
-  function rebuild() {
-    const plan = buildPlan(state.steps, data.arrival, data.travel, data.transport, state.latenessScore, ctx);
-    return plan;
-  }
+  const transportLabels = {
+    walk: UI.transport_walk, bike: UI.transport_bike,
+    car: UI.transport_car, transit: UI.transport_transit,
+  };
+  const transportEmojis = { walk: '🚶', bike: '🚲', car: '🚗', transit: '🚌' };
 
   function render2() {
-    const plan = rebuild();
-    // R4 : ne JAMAIS nommer ni afficher plan.margin.
-    const screen = el('main', { class: 'screen' }, [
-      el('header', { class: 'home-header' }, [
-        el('p', { class: 'eyebrow' }, 'Ton départ'),
-        el('h1', { class: 'display' }, `Arrivée ${data.arrival}`)
-      ]),
+    const plan = buildPlan(state.steps, data.arrival, data.travel, data.transport, state.latenessScore, ctx);
+    // R4 : la marge n'est jamais affichée ni nommée.
 
-      el('div', { class: 'card' }, [
-        el('label', { class: 'eyebrow' }, 'Heure d\'arrivée'),
-        el('input', {
-          type: 'time', value: data.arrival,
-          style: 'width:100%; margin-top:8px; background:transparent; color:var(--text); border:1px solid var(--border); border-radius:12px; padding:10px 12px; font-size:17px; font-family:inherit;',
-          oninput: (e) => { data.arrival = e.target.value || '09:00'; render2(); }
-        }),
-        el('div', { style: 'display:flex; gap:8px; flex-wrap:wrap; margin-top:14px' }, [
-          ...Object.keys(TRANSPORT_BUFFER).map((k) => {
-            const labels = { walk: 'À pied', bike: 'Vélo', car: 'Voiture', transit: 'Transports' };
-            const isOn = data.transport === k;
-            return el('button', {
-              class: 'pill',
-              style: isOn ? 'background:var(--accent-dk); color:var(--text); border-color:var(--accent-md)' : '',
-              onclick: () => { data.transport = k; render2(); }
-            }, labels[k]);
-          })
-        ]),
-        el('label', { class: 'eyebrow', style: 'display:block; margin-top:14px' }, 'Durée du trajet (min)'),
-        el('input', {
-          type: 'number', min: '0', max: '180', value: String(data.travel),
-          style: 'width:100%; margin-top:8px; background:transparent; color:var(--text); border:1px solid var(--border); border-radius:12px; padding:10px 12px; font-size:17px; font-family:inherit;',
-          oninput: (e) => { data.travel = Number(e.target.value) || 0; render2(); }
-        })
-      ]),
-
-      el('div', { class: 'card card-hi' }, [
-        el('p', { class: 'eyebrow' }, 'Le moment de te lever'),
-        el('h2', { style: 'font-size:32px; margin-top:4px' }, fromMin(plan.startMin))
-      ]),
-
-      el('div', { class: 'card' }, [
-        el('p', { class: 'eyebrow' }, 'Ta séquence'),
-        el('div', { style: 'display:flex; flex-direction:column; gap:10px; margin-top:10px' },
-          plan.sequence.map((s) =>
-            el('div', { style: 'display:flex; justify-content:space-between; align-items:center; gap:12px' }, [
-              el('span', {}, `${s.emoji || ''} ${s.label}`),
-              el('span', { class: 'pill' }, fromMin(s.at))
-            ])
-          )
-        )
-      ]),
-
-      el('div', { class: 'card', style: 'border-color:var(--border-hi)' }, [
-        el('p', { class: 'lead' }, 'Pose ton téléphone en vue et garde Douce heure ouverte. L\'app reste avec toi pendant toute la préparation.')
-      ]),
-
-      el('div', { style: 'display:flex; flex-direction:column; gap:10px' }, [
-        el('button', { class: 'btn btn-primary', onclick: () => startLive(plan) }, 'Lancer le guide'),
-        el('button', { class: 'btn btn-ghost', onclick: showHome }, 'Retour')
+    const transportPills = Object.keys(TRANSPORT_BUFFER).map((k) =>
+      el('button', {
+        class: 'pill' + (data.transport === k ? ' is-on' : ''),
+        onclick: () => { data.transport = k; render2(); },
+      }, [
+        el('span', {}, transportEmojis[k]),
+        el('span', {}, transportLabels[k]),
       ])
+    );
+
+    const timeline = plan.sequence.map((s) => {
+      const isLeave = s.key === 'leave';
+      const learned = s.confidence > 0 && s.real && s.real.length >= 2
+        ? el('div', { class: 'timeline-item__learned' }, UI.preview_learned(s.dur))
+        : null;
+      return el('div', { class: 'timeline-item' + (isLeave ? ' is-leave' : '') }, [
+        el('div', { class: 'timeline-item__time' }, fromMin(s.at)),
+        el('div', { class: 'timeline-item__emoji' }, s.emoji || ''),
+        el('div', { class: 'timeline-item__label' }, [
+          el('div', {}, s.label),
+          learned,
+        ]),
+      ]);
+    });
+
+    const screen = el('main', { class: 'screen stagger' }, [
+      wordmark(),
+      el('div', { class: 'spacer-md' }),
+      el('h1', { class: 't-display' }, UI.preview_subtitle(fromMin(plan.startMin))),
+      el('p', { class: 't-body', style: 'margin-top: 12px' }, UI.preview_body),
+      el('div', { class: 'spacer-md' }),
+
+      el('div', { class: 'card' }, [
+        el('div', { class: 't-label' }, UI.preview_arrival_label),
+        el('div', { class: 'spacer-sm' }),
+        el('input', {
+          class: 'time-input',
+          type: 'time',
+          value: data.arrival,
+          oninput: (e) => { data.arrival = e.target.value || '09:00'; render2(); },
+        }),
+        el('div', { class: 'spacer-md' }),
+        el('div', { class: 't-label' }, UI.preview_transport_label),
+        el('div', { class: 'spacer-sm' }),
+        el('div', { style: 'display:flex; gap:8px; flex-wrap:wrap' }, transportPills),
+        el('div', { class: 'spacer-md' }),
+        el('div', { class: 't-label' }, UI.preview_travel_label),
+        el('div', { class: 'spacer-sm' }),
+        el('input', {
+          class: 'text-input',
+          type: 'number',
+          min: '0', max: '180',
+          value: String(data.travel),
+          oninput: (e) => { data.travel = Number(e.target.value) || 0; render2(); },
+        }),
+      ]),
+
+      el('div', { class: 'spacer-md' }),
+      el('div', { class: 't-label' }, UI.preview_sequence_label),
+      el('div', { class: 'spacer-sm' }),
+      el('div', { style: 'display:flex; flex-direction:column; gap:8px' }, timeline),
+
+      el('div', { class: 'spacer-md' }),
+      el('div', { class: 'callout callout--accent' }, [
+        el('div', { class: 'callout__icon' }, '🛡️'),
+        el('div', { class: 'callout__text' }, UI.preview_margin_notice),
+      ]),
+      el('div', { class: 'spacer-sm' }),
+      el('div', { class: 'callout callout--warning' }, [
+        el('div', { class: 'callout__icon' }, '📱'),
+        el('div', { class: 'callout__text' }, UI.preview_wakelock_notice),
+      ]),
+
+      el('div', { class: 'spacer-md' }),
+      el('button', { class: 'btn btn--primary', onclick: () => startLive(plan) }, UI.preview_cta),
+      el('div', { class: 'spacer-sm' }),
+      el('button', { class: 'btn btn--ghost', onclick: showHome }, UI.preview_back),
     ]);
     render(screen);
   }
@@ -167,7 +215,7 @@ function showPreview(prefill) {
   render2();
 }
 
-// ---------- ÉCRAN LIVE (le coeur, R1 + R2 + R3) ----------
+// ECRAN LIVE (R1 + R2 + R3)
 
 function startLive(plan) {
   const ctx = ctxNow();
@@ -177,9 +225,11 @@ function startLive(plan) {
     arrivalMin: plan.arrivalMin,
     current: 0,
     startedAt: Date.now(),
-    measurements: [], // { stepKey, v }
+    measurements: [],
     nudged: false,
-    ctx
+    suggestedAnnounced: false,
+    currentSlipMsg: null,
+    ctx,
   };
   wake.acquire();
   wake.bindVisibility();
@@ -193,97 +243,180 @@ function liveStatus() {
   const elapsedMin = (Date.now() - live.startedAt) / 60000;
   const suggested = elapsedMin >= step.dur && live.current < live.sequence.length - 1;
   const nudgeThreshold = Math.max(step.dur * 1.6, step.dur + 4);
-  const nudge = elapsedMin >= nudgeThreshold;
+  const nudge = step.dur > 0 && elapsedMin >= nudgeThreshold;
 
-  // Heure de départ recalculée : maintenant + somme des durées restantes (jusqu'à 'leave').
+  // Recalcul de l'heure de départ projetée (somme des durées restantes hors étape courante).
   const remaining = live.sequence.slice(live.current).reduce((a, s, i) => i === 0 ? a : a + s.dur, 0);
   const d = new Date();
   const nowMin = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
   const projectedLeave = nowMin + remaining;
-  // slip en minutes (positif = on glisse, négatif = on est en avance).
-  // On compare modulo 24h, donc on borne l'écart.
   let slip = projectedLeave - live.leaveMin;
   if (slip > 720) slip -= 1440;
   if (slip < -720) slip += 1440;
 
-  return { step, suggested, nudge, slip };
+  // Progression organique (R1 : aucune valeur affichée, juste un ratio CSS).
+  const progress = step.dur > 0 ? Math.min(elapsedMin / step.dur, 1.4) : 1;
+
+  return { step, suggested, nudge, slip, progress, elapsedMin };
 }
 
 function confirmNext() {
   if (!live) return;
   const step = live.sequence[live.current];
-  // R3 : mesure RÉELLE, jamais une durée théorique.
+  // R3 : mesure RÉELLE.
   const realDur = Math.max(1, Math.round((Date.now() - live.startedAt) / 60000));
   if (step.key !== 'leave') {
     live.measurements.push({ stepKey: step.key, v: realDur });
   }
 
-  // Étape finale 'leave' : on bascule en feedback.
   if (live.current >= live.sequence.length - 1) {
     return endLive();
   }
 
-  live.current += 1;
-  live.startedAt = Date.now();
-  live.nudged = false;
-  audio.cue(live.sequence[live.current].key);
-  renderLive();
+  // Animation de souffle : 500ms avant le render de la nouvelle étape.
+  const btn = document.querySelector('.btn--confirm');
+  const emoji = document.querySelector('.step-emoji');
+  if (btn) btn.classList.add('is-releasing');
+  if (emoji) emoji.classList.add('is-done');
+
+  setTimeout(() => {
+    if (!live) return;
+    live.current += 1;
+    live.startedAt = Date.now();
+    live.nudged = false;
+    live.suggestedAnnounced = false;
+    live.currentSlipMsg = null;
+    audio.cue(live.sequence[live.current].key);
+    renderLive();
+  }, 500);
 }
 
 function renderLive() {
   if (!live) return;
-  const { step, suggested, nudge, slip } = liveStatus();
+  const { step, suggested, nudge, slip, progress } = liveStatus();
   const isLeave = step.key === 'leave';
-
-  const slipMsg = slip > 2
-    ? 'On a un peu glissé, ta marge absorbe, la suite est réajustée.'
-    : slip < -2
-      ? 'Tu prends de l\'avance, profite de ce temps pour toi.'
-      : null;
-
   const next = live.sequence[live.current + 1];
 
-  const screen = el('main', { class: 'screen' }, [
-    el('p', { class: 'eyebrow' }, isLeave ? 'C\'est le moment' : 'Maintenant'),
-    el('div', {
-      class: 'card card-hi',
-      style: 'display:flex; flex-direction:column; gap:6px; padding:28px 22px'
-    }, [
-      el('div', { style: 'font-size:64px; line-height:1' }, step.emoji || ''),
-      el('h1', { class: 'display', style: 'font-size:36px; margin-top:8px' }, step.label),
-      isLeave
-        ? el('p', { class: 'lead', style: 'margin-top:8px' }, 'Prends ton sac, respire, en route.')
-        : el('p', { class: 'lead', style: 'margin-top:8px' }, 'Prends ton temps. Quand c\'est fait, confirme.')
-    ]),
+  // Message glissement, tiré une fois par étape pour rester stable.
+  if (slip > 2 && !live.currentSlipMsg) {
+    live.currentSlipMsg = pick('slip');
+  } else if (slip <= 2) {
+    live.currentSlipMsg = null;
+  }
 
-    nudge && !isLeave
-      ? el('div', { class: 'card' }, [
-          el('p', { class: 'lead' }, 'Tu es toujours sur cette étape, c\'est ok. Quand tu as fini, un tap suffit.')
-        ])
-      : null,
+  if (isLeave) {
+    return renderLeave(slip);
+  }
 
-    slipMsg ? el('p', { class: 'eyebrow', style: 'color:var(--text-mid)' }, slipMsg) : null,
+  // Texte du bouton selon l'état.
+  const nextLabel = next ? next.label.toLowerCase() : '';
+  const btnText = suggested
+    ? UI.live_confirm_suggested(nextLabel)
+    : UI.live_confirm_idle(nextLabel);
+  const hint = suggested ? UI.live_confirm_hint_suggested : UI.live_confirm_hint_idle;
 
-    next && !isLeave
-      ? el('p', { class: 'eyebrow' }, `Ensuite, ${next.emoji || ''} ${next.label}`)
-      : null,
+  // Message d'étape : tiré au premier render de l'étape.
+  if (!live.stepMessage || live.lastMessageStep !== live.current) {
+    live.stepMessage = pick(step.key);
+    live.lastMessageStep = live.current;
+  }
 
-    el('div', { style: 'display:flex; flex-direction:column; gap:10px; margin-top:auto' }, [
-      el('button', {
-        class: 'btn ' + (suggested || isLeave ? 'btn-primary' : ''),
-        onclick: confirmNext
-      }, isLeave ? 'Je pars' : 'C\'est fait'),
-      el('button', { class: 'btn btn-ghost', onclick: abortLive }, 'Quitter le guide')
-    ])
+  const progressFill = el('div', {
+    class: 'progress-fill' + (nudge ? ' is-overrun' : ''),
+    style: `width: ${Math.min(progress, 1) * 100}%`,
+  });
+
+  const stepCard = el('div', {
+    class: 'step-card' + (suggested ? ' is-suggested' : ''),
+  }, [
+    el('div', { class: 'step-emoji' }, step.emoji || ''),
+    el('h1', { class: 't-step' }, step.label),
+    el('p', { class: 't-body', style: 'margin-top: 16px' }, live.stepMessage),
   ]);
-  // Layout flex pour que le bouton tombe en bas.
-  screen.style.minHeight = '100dvh';
+
+  const screen = el('main', { class: 'screen' }, [
+    wordmark(),
+    el('div', { class: 'spacer-md' }),
+    el('div', { class: 't-label' }, UI.live_current_label),
+    el('div', { class: 'spacer-sm' }),
+    stepCard,
+    el('div', { class: 'spacer-md' }),
+    el('div', { class: 'progress-track' }, progressFill),
+
+    next ? el('div', { class: 't-label', style: 'text-align:center' },
+      `${UI.live_next_prefix} ${next.emoji || ''} ${next.label}`) : null,
+
+    nudge ? el('div', { class: 'spacer-md' }) : null,
+    nudge ? el('div', { class: 'callout callout--accent' }, [
+      el('div', { class: 'callout__icon' }, '🤲'),
+      el('div', { class: 'callout__text' }, pick('nudge')),
+    ]) : null,
+
+    live.currentSlipMsg ? el('div', { class: 'spacer-sm' }) : null,
+    live.currentSlipMsg ? el('div', { class: 'callout' }, [
+      el('div', { class: 'callout__icon' }, '🌿'),
+      el('div', { class: 'callout__text' }, live.currentSlipMsg),
+    ]) : null,
+
+    el('div', { style: 'flex: 1' }),
+
+    el('button', {
+      class: 'btn btn--confirm ' + (suggested ? 'is-suggested' : 'is-idle'),
+      onclick: confirmNext,
+    }, btnText),
+    el('div', { class: 'spacer-sm' }),
+    el('div', { class: 'callout' }, [
+      el('div', { class: 'callout__icon' }, suggested ? '🌅' : '🤍'),
+      el('div', { class: 'callout__text' }, hint),
+    ]),
+    el('div', { class: 'spacer-sm' }),
+    el('button', { class: 'btn btn--ghost', onclick: abortLive }, UI.live_quit),
+  ]);
   render(screen);
 
-  if (nudge && !live.nudged && !isLeave) {
+  if (suggested && !live.suggestedAnnounced && next) {
+    live.suggestedAnnounced = true;
+    audio.cue(next.key);
+    toast(next.label, pick(next.key), next.emoji);
+  }
+
+  if (nudge && !live.nudged) {
     live.nudged = true;
     audio.cue('nudge');
   }
+}
+
+function renderLeave(slip) {
+  // R4 : on n'affiche jamais la marge. On dit juste l'arrivée prévue.
+  const arrivalTxt = slip > 2
+    ? UI.leave_slip(fromMin(live.arrivalMin))
+    : UI.leave_arrival(fromMin(live.arrivalMin));
+
+  const leaveMsg = pick('leave');
+
+  const halo = el('div', { class: 'card card--accent leave-halo' }, [
+    el('div', { class: 'leave-ring', style: 'width: 96px; height: 96px; border-radius: 50%; margin: 0 auto' }, [
+      el('div', { class: 'step-emoji', style: 'margin: 0; font-size: 64px' }, '🌅'),
+    ]),
+    el('div', { class: 'spacer-md' }),
+    el('h1', { class: 't-display', style: 'text-align:center' }, UI.leave_title),
+    el('p', { class: 't-body', style: 'margin-top: 14px; text-align:center' }, leaveMsg),
+    el('div', { class: 'spacer-sm' }),
+    el('p', { class: 't-label', style: 'text-align:center' }, arrivalTxt),
+  ]);
+
+  const screen = el('main', { class: 'screen' }, [
+    wordmark(),
+    el('div', { class: 'spacer-md' }),
+    el('div', { class: 't-label' }, UI.leave_label),
+    el('div', { class: 'spacer-sm' }),
+    halo,
+    el('div', { style: 'flex: 1' }),
+    el('button', { class: 'btn btn--primary', onclick: confirmNext }, UI.leave_cta),
+    el('div', { class: 'spacer-sm' }),
+    el('button', { class: 'btn btn--ghost', onclick: abortLive }, UI.live_quit),
+  ]);
+  render(screen);
 }
 
 function endLive() {
@@ -302,32 +435,65 @@ function abortLive() {
   showHome();
 }
 
-// ---------- ÉCRAN FEEDBACK (R5) ----------
+// ECRAN FEEDBACK (R5)
 
 function showFeedback(measurements, ctx) {
-  function pick(status, reply) {
+  let selected = null;
+
+  function submit() {
+    if (!selected) return;
     const state = loadState();
-    onFeedback(state, status, measurements, ctx);
+    onFeedback(state, selected, measurements, ctx);
     saveState(state);
-    toast(reply);
-    setTimeout(() => showInsight(), 600);
+    toast(UI.feedback_label, pick(`feedback_${selected}`), '🌿');
+    setTimeout(() => showInsight(), 700);
   }
 
-  const screen = el('main', { class: 'screen' }, [
-    el('header', { class: 'home-header' }, [
-      el('p', { class: 'eyebrow' }, 'Tu y es'),
-      el('h1', { class: 'display' }, 'Comment c\'était ?')
-    ]),
-    el('div', { style: 'display:flex; flex-direction:column; gap:10px' }, [
-      el('button', { class: 'btn', onclick: () => pick('early', 'Une vraie respiration, c\'est précieux.') }, 'En avance et tranquille'),
-      el('button', { class: 'btn btn-primary', onclick: () => pick('ontime', 'Pile à l\'heure, bravo.') }, 'Pile à l\'heure'),
-      el('button', { class: 'btn', onclick: () => pick('late', 'Ce n\'est rien, on ajuste pour la prochaine.') }, 'Un peu juste')
-    ])
-  ]);
-  render(screen);
+  const options = [
+    { key: 'early', label: UI.feedback_early_label, emoji: '🌤️' },
+    { key: 'ontime', label: UI.feedback_ontime_label, emoji: '🌞' },
+    { key: 'late', label: UI.feedback_late_label, emoji: '🌥️' },
+  ];
+
+  function renderF() {
+    const screen = el('main', { class: 'screen stagger' }, [
+      wordmark(),
+      el('div', { class: 'spacer-md' }),
+      el('div', { class: 't-label' }, UI.feedback_label),
+      el('div', { class: 'spacer-sm' }),
+      el('h1', { class: 't-display' }, UI.feedback_title),
+      el('p', { class: 't-body', style: 'margin-top: 12px' }, UI.feedback_body),
+      el('div', { class: 'spacer-md' }),
+      el('div', { style: 'display:flex; flex-direction:column; gap:10px' },
+        options.map((o) =>
+          el('button', {
+            class: 'feedback-option' + (selected === o.key ? ' is-selected' : ''),
+            onclick: () => { selected = o.key; renderF(); },
+          }, [
+            el('div', { class: 'feedback-option__icon' }, o.emoji),
+            el('div', {}, [
+              el('div', { class: 'feedback-option__label' }, o.label),
+              selected === o.key
+                ? el('div', { class: 'feedback-option__sub t-body' }, pick(`feedback_${o.key}`))
+                : null,
+            ]),
+          ])
+        )
+      ),
+      el('div', { style: 'flex: 1' }),
+      el('button', {
+        class: 'btn btn--primary',
+        disabled: selected ? null : true,
+        onclick: submit,
+      }, selected ? UI.feedback_cta_ready : UI.feedback_cta_idle),
+    ]);
+    render(screen);
+  }
+
+  renderF();
 }
 
-// ---------- ÉCRAN INSIGHT ----------
+// ECRAN INSIGHT
 
 function showInsight() {
   const state = loadState();
@@ -343,129 +509,191 @@ function showInsight() {
       return { ...s, mean, variance };
     });
 
-  const screen = el('main', { class: 'screen' }, [
-    el('header', { class: 'home-header' }, [
-      el('p', { class: 'eyebrow' }, 'Doucement, ça apprend'),
-      el('h1', { class: 'display' }, ratio == null ? 'Premiers pas' : `${ratio}% à l'heure`)
-    ]),
+  const statusColor = {
+    early: 'var(--status-early)',
+    ontime: 'var(--status-ok)',
+    late: 'var(--status-late)',
+  };
+
+  const screen = el('main', { class: 'screen stagger' }, [
+    wordmark(),
+    el('div', { class: 'spacer-md' }),
+    el('div', { class: 't-label' }, UI.insight_label),
+    el('div', { class: 'spacer-sm' }),
+    el('h1', { class: 't-display' }, ratio == null ? UI.insight_first : UI.insight_rate(ratio)),
+
+    last7.length > 0 ? el('div', { class: 'spacer-md' }) : null,
+    last7.length > 0 ? el('div', { class: 't-label' }, UI.insight_history_label) : null,
+    last7.length > 0 ? el('div', { class: 'spacer-sm' }) : null,
+    last7.length > 0 ? el('div', { class: 'history-bars' },
+      last7.map((h) => el('div', {
+        class: 'history-bar',
+        style: `height: ${h.status === 'late' ? 35 : h.status === 'early' ? 80 : 55}%; background: ${statusColor[h.status]}`,
+      }))
+    ) : null,
+
+    el('div', { class: 'spacer-md' }),
     el('div', { class: 'card' }, [
-      el('p', { class: 'eyebrow' }, 'Ce que j\'ai appris'),
+      el('div', { class: 't-label' }, UI.insight_learned_title),
+      el('div', { class: 'spacer-sm' }),
       learned.length === 0
-        ? el('p', { class: 'lead', style: 'margin-top:10px' }, 'Encore quelques départs et je te montrerai tes vraies durées.')
-        : el('div', { style: 'display:flex; flex-direction:column; gap:10px; margin-top:10px' },
+        ? el('p', { class: 't-body' }, UI.insight_learned_empty)
+        : el('div', { style: 'display:flex; flex-direction:column; gap:10px' },
             learned.map((s) =>
-              el('div', { style: 'display:flex; justify-content:space-between; align-items:center; gap:10px' }, [
-                el('span', {}, `${s.emoji || ''} ${s.label}`),
-                el('span', { class: 'pill' }, [
-                  el('s', { style: 'color:var(--text-dim); margin-right:8px' }, `${s.est} min`),
-                  el('span', {}, `${s.mean} min`),
-                  s.variance > 2 ? el('span', { style: 'color:var(--text-mid); margin-left:6px' }, `±${s.variance}`) : null
-                ].filter(Boolean))
+              el('div', { class: 'timeline-item' }, [
+                el('div', { class: 'timeline-item__emoji' }, s.emoji || ''),
+                el('div', { class: 'timeline-item__label' }, [
+                  el('div', {}, s.label),
+                  el('div', { class: 'timeline-item__learned' },
+                    s.variance > 2 ? UI.insight_mean_var(s.mean, s.variance) : UI.insight_mean(s.mean)),
+                ]),
+                el('div', { class: 'tag tag--accent' }, UI.insight_was(s.est)),
               ])
             )
-          )
+          ),
     ]),
-    el('p', { class: 'eyebrow', style: 'text-align:center' }, 'Tes données restent sur ton téléphone.'),
-    el('button', { class: 'btn btn-primary', onclick: showHome }, 'Retour à l\'accueil')
+
+    el('div', { class: 'spacer-md' }),
+    el('div', { class: 'callout callout--accent' }, [
+      el('div', { class: 'callout__icon' }, '🔒'),
+      el('div', { class: 'callout__text' }, UI.insight_learned_privacy),
+    ]),
+
+    el('div', { class: 'spacer-md' }),
+    el('button', { class: 'btn btn--primary', onclick: showHome }, UI.insight_back),
   ]);
   render(screen);
 }
 
-// ---------- ÉCRAN ROUTINE ----------
+// ECRAN ROUTINE
 
 function showRoutine() {
   const state = loadState();
   const r = state.routine || { arrival: '09:00', transport: 'walk', travel: 20, days: [1,2,3,4,5], evening: false };
-
   const data = { ...r };
 
   function save() {
     const next = loadState();
     next.routine = data;
     saveState(next);
-    toast('Rituel enregistré.');
-    showHome();
+    toast(UI.routine_label, UI.routine_saved, '🌿');
+    setTimeout(showHome, 600);
   }
 
   function clear() {
     const next = loadState();
     next.routine = null;
     saveState(next);
-    toast('Rituel retiré.');
-    showHome();
+    toast(UI.routine_label, UI.routine_cleared, '🍃');
+    setTimeout(showHome, 600);
   }
 
-  function render3() {
+  function renderR() {
     const dayLabels = ['D','L','M','M','J','V','S'];
-    const screen = el('main', { class: 'screen' }, [
-      el('header', { class: 'home-header' }, [
-        el('p', { class: 'eyebrow' }, 'Mon rituel'),
-        el('h1', { class: 'display' }, 'Départ récurrent')
-      ]),
+    const screen = el('main', { class: 'screen stagger' }, [
+      wordmark(),
+      el('div', { class: 'spacer-md' }),
+      el('div', { class: 't-label' }, UI.routine_label),
+      el('div', { class: 'spacer-sm' }),
+      el('h1', { class: 't-display' }, UI.routine_title),
+      el('p', { class: 't-body', style: 'margin-top: 12px' }, UI.routine_body),
+      el('div', { class: 'spacer-md' }),
+
       el('div', { class: 'card' }, [
-        el('label', { class: 'eyebrow' }, 'Heure d\'arrivée'),
+        el('div', { class: 't-label' }, UI.routine_arrival_label),
+        el('div', { class: 'spacer-sm' }),
         el('input', {
-          type: 'time', value: data.arrival,
-          style: 'width:100%; margin-top:8px; background:transparent; color:var(--text); border:1px solid var(--border); border-radius:12px; padding:10px 12px; font-size:17px; font-family:inherit;',
-          oninput: (e) => { data.arrival = e.target.value || '09:00'; }
+          class: 'time-input',
+          type: 'time',
+          value: data.arrival,
+          oninput: (e) => { data.arrival = e.target.value || '09:00'; },
         }),
-        el('label', { class: 'eyebrow', style: 'display:block; margin-top:14px' }, 'Trajet (min)'),
+        el('div', { class: 'spacer-md' }),
+        el('div', { class: 't-label' }, UI.routine_travel_label),
+        el('div', { class: 'spacer-sm' }),
         el('input', {
-          type: 'number', min: '0', max: '180', value: String(data.travel),
-          style: 'width:100%; margin-top:8px; background:transparent; color:var(--text); border:1px solid var(--border); border-radius:12px; padding:10px 12px; font-size:17px; font-family:inherit;',
-          oninput: (e) => { data.travel = Number(e.target.value) || 0; }
+          class: 'text-input',
+          type: 'number',
+          min: '0', max: '180',
+          value: String(data.travel),
+          oninput: (e) => { data.travel = Number(e.target.value) || 0; },
         }),
-        el('label', { class: 'eyebrow', style: 'display:block; margin-top:14px' }, 'Jours'),
-        el('div', { style: 'display:flex; gap:6px; margin-top:8px; flex-wrap:wrap' },
+        el('div', { class: 'spacer-md' }),
+        el('div', { class: 't-label' }, UI.routine_days_label),
+        el('div', { class: 'spacer-sm' }),
+        el('div', { style: 'display:flex; gap:6px; flex-wrap:wrap' },
           dayLabels.map((lab, i) => {
             const on = data.days.includes(i);
             return el('button', {
-              class: 'pill',
-              style: on ? 'background:var(--accent-dk); color:var(--text); border-color:var(--accent-md)' : '',
+              class: 'pill' + (on ? ' is-on' : ''),
               onclick: () => {
                 data.days = on ? data.days.filter((d) => d !== i) : [...data.days, i].sort();
-                render3();
-              }
+                renderR();
+              },
             }, lab);
           })
-        )
+        ),
       ]),
-      el('div', { style: 'display:flex; flex-direction:column; gap:10px' }, [
-        el('button', { class: 'btn btn-primary', onclick: save }, 'Enregistrer'),
-        state.routine ? el('button', { class: 'btn btn-ghost', onclick: clear }, 'Retirer le rituel') : null,
-        el('button', { class: 'btn btn-ghost', onclick: showHome }, 'Retour')
-      ].filter(Boolean))
+
+      el('div', { class: 'spacer-md' }),
+      el('div', { class: 'card' }, [
+        el('div', { style: 'display:flex; justify-content:space-between; align-items:center; gap:12px' }, [
+          el('div', {}, [
+            el('div', { class: 't-body', style: 'color: var(--text); font-weight: 600' }, UI.routine_evening_label),
+            el('div', { class: 't-body', style: 'font-size: 13px; margin-top: 2px' }, UI.routine_evening_sub),
+          ]),
+          el('button', {
+            class: 'toggle ' + (data.evening ? 'is-on' : 'is-off'),
+            onclick: () => { data.evening = !data.evening; renderR(); },
+          }, [ el('span', { class: 'toggle__thumb' }) ]),
+        ]),
+      ]),
+
+      el('div', { class: 'spacer-md' }),
+      el('button', { class: 'btn btn--primary', onclick: save }, UI.routine_cta),
+      el('div', { class: 'spacer-sm' }),
+      state.routine ? el('button', { class: 'btn btn--ghost', onclick: clear }, UI.routine_clear) : null,
+      el('div', { class: 'spacer-sm' }),
+      el('button', { class: 'btn btn--ghost', onclick: showHome }, UI.routine_back),
     ]);
     render(screen);
   }
 
-  render3();
+  renderR();
 }
 
-// ---------- ÉCRAN SOCIAL (maquette) ----------
+// ECRAN SOCIAL (maquette)
 
 function showSocial() {
-  const screen = el('main', { class: 'screen' }, [
-    el('header', { class: 'home-header' }, [
-      el('p', { class: 'eyebrow' }, 'Mes proches'),
-      el('h1', { class: 'display' }, 'Bientôt avec toi')
+  const screen = el('main', { class: 'screen stagger' }, [
+    wordmark(),
+    el('div', { class: 'spacer-md' }),
+    el('div', { class: 't-label' }, UI.social_label),
+    el('div', { class: 'spacer-sm' }),
+    el('h1', { class: 't-display' }, UI.social_title),
+    el('p', { class: 't-body', style: 'margin-top: 12px' }, UI.social_body),
+    el('div', { class: 'spacer-md' }),
+
+    el('div', { class: 'mockup-banner' }, [
+      el('div', { class: 'mockup-banner__icon' }, 'ⓘ'),
+      el('div', { class: 'mockup-banner__text' }, UI.social_mockup_banner),
     ]),
-    el('div', { class: 'card', style: 'border-color:var(--amber); background:rgba(232,178,92,0.08)' }, [
-      el('p', { class: 'eyebrow', style: 'color:var(--amber)' }, 'Maquette'),
-      el('p', { class: 'lead', style: 'margin-top:6px' }, 'Cette fonction est conçue mais pas encore active. Tes proches ne reçoivent rien aujourd\'hui.')
+    el('div', { class: 'spacer-md' }),
+
+    el('div', { class: 'card card--accent' }, [
+      el('div', { class: 't-label' }, UI.social_signal_label),
+      el('div', { class: 'spacer-sm' }),
+      el('div', { class: 't-body' }, UI.social_signal_sub),
     ]),
-    el('div', { class: 'card card-hi' }, [
-      el('p', { class: 'eyebrow' }, 'La promesse'),
-      el('p', { class: 'lead', style: 'margin-top:6px' }, 'Tes proches ne reçoivent que des signaux positifs que tu choisis. Jamais de retard, jamais de position. Le social célèbre, il ne surveille pas.')
+    el('div', { class: 'spacer-md' }),
+
+    el('div', { class: 'callout callout--accent' }, [
+      el('div', { class: 'callout__icon' }, '🤝'),
+      el('div', { class: 'callout__text' }, UI.social_guardrail),
     ]),
-    el('div', { class: 'card' }, [
-      el('p', { class: 'eyebrow' }, 'Aperçu'),
-      el('div', { style: 'display:flex; flex-direction:column; gap:8px; margin-top:10px' }, [
-        el('p', { class: 'lead' }, '✨ Camille est en route, sereine.'),
-        el('p', { class: 'lead' }, '☀️ Léo a pris une douce avance ce matin.')
-      ])
-    ]),
-    el('button', { class: 'btn btn-ghost', onclick: showHome }, 'Retour')
+
+    el('div', { style: 'flex: 1' }),
+    el('button', { class: 'btn btn--ghost', onclick: showHome }, UI.social_back),
   ]);
   render(screen);
 }
