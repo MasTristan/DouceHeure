@@ -1,13 +1,66 @@
+/* css/tokens.css, source de vérité visuelle */
+/* Concept : l'aube. Du profond au lumineux. */
+
 :root {
-  --bg:        #0d1014;   --surface:   #161b20;
-  --surface-hi:#1c232a;   --border:    #272f38;
-  --border-hi: #37424e;   --accent:    #62e6a4;
-  --accent-dk: #1f4d38;   --accent-md: #2d7a56;
-  --amber:     #e8b25c;   --blue:      #5c9de8;
-  --text:      #eef3ef;   --text-mid:  #8a9d91;
-  --text-dim:  #4a5a50;
-  --ok:#62e6a4; --early:#5c9de8; --late:#e8915c;
-  --font-display:'Fraunces',serif;
-  --font-body:'Outfit',sans-serif;
-  --radius:16px; --radius-lg:24px;
+  /* Fonds */
+  --bg:           #0b0f0d;
+  --bg-grad:      radial-gradient(ellipse 140% 70% at 50% -5%,
+                    #111a14 0%, #0b0f0d 65%);
+  --surface:      #141918;
+  --surface-hi:   #1a211e;
+  --surface-glow: #1f2d26;
+
+  /* Bordures */
+  --border:       #232e28;
+  --border-hi:    #2e3d35;
+
+  /* Accent principal, vert aube */
+  --accent:       #6eeea8;
+  --accent-dk:    #1a4a30;
+  --accent-md:    #286e48;
+  --accent-glow:  rgba(110, 238, 168, 0.12);
+
+  /* Secondaires */
+  --amber:        #f0c070;
+  --amber-dk:     #3d2e0a;
+  --blue:         #70b8f0;
+  --red-soft:     #e07070;
+
+  /* Texte */
+  --text:         #f0f5f1;
+  --text-mid:     #8aaa92;
+  --text-dim:     #4a5e52;
+
+  /* Statuts */
+  --status-ok:    #6eeea8;
+  --status-early: #70b8f0;
+  --status-late:  #f0a070;
+
+  /* Typographie */
+  --font-display: 'Fraunces', serif;
+  --font-body:    'Outfit', sans-serif;
+
+  /* Espacements */
+  --space-xs:  6px;
+  --space-sm:  12px;
+  --space-md:  20px;
+  --space-lg:  32px;
+  --space-xl:  48px;
+
+  /* Rayons */
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 26px;
+  --radius-xl: 36px;
+
+  /* Transitions */
+  --ease-out:   cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-soft:  cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast:   150ms;
+  --dur-mid:    350ms;
+  --dur-slow:   600ms;
+
+  /* Ombres */
+  --shadow-card: 0 2px 24px rgba(0,0,0,0.35);
+  --shadow-glow: 0 0 40px rgba(110,238,168,0.10);
 }
