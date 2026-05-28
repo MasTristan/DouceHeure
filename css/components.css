@@ -119,6 +119,8 @@
   position: relative;
   overflow: hidden;
   transition: border-color var(--dur-slow) var(--ease-soft);
+}
+.step-card.is-new {
   animation: stepCardIn 0.5s var(--ease-out) both;
 }
 .step-card.is-suggested {
