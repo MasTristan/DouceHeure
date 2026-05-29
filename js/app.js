@@ -1,6 +1,6 @@
 // Orchestration et démarrage.
 
-import { loadState, saveState } from './store.js';
+import { loadState, saveState, migrateIfNeeded } from './store.js';
 import * as audio from './audio.js';
 import { showHome } from './ui.js';
 
@@ -11,8 +11,9 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// État initial : charge (et crée si besoin) la persistance.
-const state = loadState();
+// État initial : charge, migre si ancien format, et persiste.
+let state = loadState();
+state = migrateIfNeeded(state);
 audio.setEnabled(state.sound !== false);
 saveState(state);
 

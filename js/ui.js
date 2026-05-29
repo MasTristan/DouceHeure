@@ -1,6 +1,7 @@
 // Rendu des écrans et navigation. Pas de calcul métier ici.
 
-import { loadState, saveState } from './store.js';
+import { loadState, saveState, getActiveSteps, getActiveProfile } from './store.js';
+import { showStudio } from './studio.js';
 import { fromMin } from './time.js';
 import { buildPlan, TRANSPORT_BUFFER } from './plan.js';
 import { onFeedback } from './predict.js';
@@ -80,6 +81,7 @@ export function showHome() {
   const state = loadState();
   const ctx = ctxNow();
   const routineToday = state.routine && state.routine.days.includes(ctx.day) ? state.routine : null;
+  const activeProfile = getActiveProfile(state);
 
   const title = state.name ? UI.home_title_with_name(state.name) : UI.home_title_anon;
 
@@ -106,10 +108,24 @@ export function showHome() {
     );
   }
 
+  const profileSub = activeProfile
+    ? el('div', { class: 'home-profile-tag' }, [
+        el('span', {}, activeProfile.emoji),
+        el('span', {}, activeProfile.name),
+      ])
+    : null;
+
   children.push(
-    el('button', { class: 'btn btn--primary', onclick: () => showPreview(null) }, UI.home_cta),
+    el('button', {
+      class: 'btn btn--primary',
+      onclick: () => showPreview(null),
+      'aria-label': UI.home_cta,
+    }, [
+      el('span', {}, UI.home_cta),
+    ]),
+    profileSub,
     el('div', { class: 'spacer-sm' }),
-    el('button', { class: 'btn btn--soft', onclick: showRoutine }, UI.home_routine_link),
+    el('button', { class: 'btn btn--soft', onclick: showStudio }, UI.home_studio_link),
     el('div', { class: 'spacer-sm' }),
     el('button', { class: 'btn btn--ghost', onclick: showSocial }, UI.home_social_link),
   );
@@ -123,6 +139,7 @@ export function showHome() {
 function showPreview(prefill) {
   const state = loadState();
   const ctx = ctxNow();
+  const steps = getActiveSteps(state);
 
   const data = {
     arrival: prefill?.arrival || '09:00',
@@ -137,7 +154,7 @@ function showPreview(prefill) {
   const transportEmojis = { walk: '🚶', bike: '🚲', car: '🚗', transit: '🚌' };
 
   function render2() {
-    const plan = buildPlan(state.steps, data.arrival, data.travel, data.transport, state.latenessScore, ctx);
+    const plan = buildPlan(steps, data.arrival, data.travel, data.transport, state.latenessScore, ctx);
     // R4 : la marge n'est jamais affichée ni nommée.
 
     const transportPills = Object.keys(TRANSPORT_BUFFER).map((k) =>
@@ -551,11 +568,12 @@ function showFeedback(measurements, ctx) {
 
 function showInsight() {
   const state = loadState();
+  const steps = getActiveSteps(state);
   const last7 = state.history.slice(-7);
   const ontime = last7.filter((h) => h.status !== 'late').length;
   const ratio = last7.length ? Math.round((ontime / last7.length) * 100) : null;
 
-  const learned = state.steps
+  const learned = steps
     .filter((s) => s.active && s.real.length >= 2)
     .map((s) => {
       const mean = Math.round(s.real.reduce((a, r) => a + r.v, 0) / s.real.length);
@@ -621,7 +639,7 @@ function showInsight() {
 
 // ECRAN ROUTINE
 
-function showRoutine() {
+export function showRoutine() {
   const state = loadState();
   const r = state.routine || { arrival: '09:00', transport: 'walk', travel: 20, days: [1,2,3,4,5], evening: false };
   const data = { ...r };

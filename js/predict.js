@@ -39,8 +39,10 @@ export function onFeedback(state, status, realDurs, ctx) {
   const target = status === 'late' ? 1 : status === 'ontime' ? 0.4 : 0.15;
   state.latenessScore = state.latenessScore * 0.6 + target * 0.4;
 
+  const profile = state.profiles?.find((p) => p.id === state.activeProfileId);
+  const steps = profile?.steps || state.steps || [];
   for (const { stepKey, v } of realDurs || []) {
-    const step = state.steps.find((s) => s.key === stepKey);
+    const step = steps.find((s) => s.key === stepKey);
     if (!step) continue;
     step.real.push({ v, day: ctx.day, type: ctx.type });
     if (step.real.length > 8) step.real.shift(); // FIFO max 8
