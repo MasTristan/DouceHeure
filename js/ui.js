@@ -108,10 +108,14 @@ export function showHome() {
     );
   }
 
+  const activeStepCount = activeProfile
+    ? activeProfile.steps.filter((s) => s.active).length
+    : 0;
   const profileSub = activeProfile
     ? el('div', { class: 'home-profile-tag' }, [
         el('span', {}, activeProfile.emoji),
         el('span', {}, activeProfile.name),
+        el('span', { class: 'home-profile-tag__count' }, ` · ${activeStepCount} étapes`),
       ])
     : null;
 

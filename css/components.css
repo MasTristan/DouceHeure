@@ -825,6 +825,16 @@ body.in-studio {
   background: var(--bg-studio);
 }
 
+/* Entrée du Studio depuis l'accueil : vient de la droite */
+.screen--studio-enter {
+  animation: slideLeft .4s var(--ease-out) both;
+}
+
+/* Retour vers l'accueil depuis le Studio : part vers la droite */
+.screen--closing {
+  animation: slideRight .35s var(--ease-out) both;
+}
+
 .studio-topbar {
   display: flex;
   align-items: center;
@@ -1208,6 +1218,10 @@ body.in-studio {
   font-family: var(--font-body);
   font-size: 12px;
   color: var(--text-dim);
+}
+.home-profile-tag__count {
+  color: var(--text-dim);
+  opacity: 0.7;
 }
 
 /* Save button success state override */
