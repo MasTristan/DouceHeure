@@ -13,20 +13,25 @@ export const DEFAULT_STEPS = [
   { key: 'ready',     label: 'Clés, prêt·e',     emoji: '🗝️', est: 4,  active: true,  fixed: true,  real: [] }
 ];
 
+function makeDefaultProfiles() {
+  const full = structuredClone(DEFAULT_STEPS);
+  return [
+    { id: 'profile_default', name: 'Routine complète', emoji: '✨', steps: full },
+    {
+      id: 'profile_fast', name: 'Routine rapide', emoji: '⚡',
+      steps: full.filter((s) => s.fixed || ['shower', 'outfit'].includes(s.key))
+                 .map((s) => ({ ...s, real: [] })),
+    },
+  ];
+}
+
 function defaultState() {
   return {
     name: '',
     sound: true,
     latenessScore: 0.5,
-    profiles: [
-      {
-        id: 'default',
-        name: 'Routine complète',
-        emoji: '✨',
-        steps: structuredClone(DEFAULT_STEPS),
-      }
-    ],
-    activeProfileId: 'default',
+    profiles: makeDefaultProfiles(),
+    activeProfileId: 'profile_default',
     history: [],
     routine: null
   };
@@ -52,23 +57,27 @@ export function saveState(state) {
 
 // Migration depuis l'ancien format (steps à plat) vers profiles.
 export function migrateIfNeeded(state) {
-  if (state.steps && !state.profiles) {
-    state.profiles = [
-      {
-        id: 'default',
-        name: 'Routine complète',
-        emoji: '✨',
-        steps: state.steps,
-      }
-    ];
-    state.activeProfileId = 'default';
-    delete state.steps;
-    saveState(state);
+  // Déjà migré.
+  if (state.profiles && state.activeProfileId) {
+    if (!state.profiles.find((p) => p.id === state.activeProfileId)) {
+      state.activeProfileId = state.profiles[0]?.id;
+    }
+    return state;
   }
-  // Garantie : activeProfileId pointe sur un profil existant.
-  if (!state.profiles?.find((p) => p.id === state.activeProfileId)) {
-    state.activeProfileId = state.profiles?.[0]?.id || 'default';
-  }
+
+  const existingSteps = state.steps || structuredClone(DEFAULT_STEPS);
+  state.profiles = [
+    { id: 'profile_default', name: 'Routine complète', emoji: '✨', steps: existingSteps },
+    {
+      id: 'profile_fast', name: 'Routine rapide', emoji: '⚡',
+      steps: existingSteps
+        .filter((s) => s.fixed || ['shower', 'outfit'].includes(s.key))
+        .map((s) => ({ ...s })),
+    },
+  ];
+  state.activeProfileId = 'profile_default';
+  delete state.steps;
+  saveState(state);
   return state;
 }
 

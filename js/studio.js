@@ -725,7 +725,7 @@ function renderStudio() {
   const root = document.getElementById('app');
   if (!root) return;
   if (root.dataset.screen !== 'studio') {
-    screen.classList.add('screen--enter');
+    screen.classList.add('screen--studio-enter');
     root.dataset.screen = 'studio';
   }
   root.replaceChildren(screen);
@@ -763,7 +763,15 @@ function leaveStudio() {
   document.body.classList.remove('in-studio');
   const root = document.getElementById('app');
   if (root) delete root.dataset.screen;
-  import('./ui.js').then((m) => m.showHome());
+  import('./ui.js').then((m) => {
+    m.showHome();
+    // Remplace l'animation d'entrée par slideRight (retour depuis Studio).
+    const screen = root?.querySelector('main');
+    if (screen) {
+      screen.classList.remove('screen--enter');
+      screen.classList.add('screen--closing');
+    }
+  });
 }
 
 function showRoutineSettings() {
