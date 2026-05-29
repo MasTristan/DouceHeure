@@ -1,209 +1,206 @@
+// js/copy.js
 // Source de vérité unique pour tous les textes affichés.
-// Chaque clé a un pool de N messages. pick(key) tire au sort
-// sans répéter deux fois de suite le même message.
+// Ton : lucide, direct, légèrement complice. Zéro métaphore spa.
+// Règles : pas de métaphore corporelle/spirituelle, pas d'adjectifs
+// émotionnels inutiles, humour par la lucidité pas par les blagues,
+// max deux phrases par message, souvent une seule.
 
-const lastPicked = {};
+// ─── MOTEUR DE VARIATION ────────────────────────────────────────
+// Tire au sort sans répéter deux fois de suite le même message.
+
+const _last = {};
 
 export function pick(key) {
   const pool = COPY[key];
-  if (!pool || pool.length === 0) return '';
+  if (!pool || pool.length === 0) return "";
   if (pool.length === 1) return pool[0];
   let idx;
-  do { idx = Math.floor(Math.random() * pool.length); }
-  while (idx === lastPicked[key]);
-  lastPicked[key] = idx;
+  do {
+    idx = Math.floor(Math.random() * pool.length);
+  } while (idx === _last[key]);
+  _last[key] = idx;
   return pool[idx];
 }
+
+// ─── MESSAGES PAR ÉTAPE ─────────────────────────────────────────
 
 export const COPY = {
 
   wakeup: [
-    "La journée commence. Prends le temps de revenir.",
-    "Pas de rush. Tu as exactement le temps qu'il faut.",
-    "Je suis là. Commence doucement.",
-    "Chaque matin recommence. Celui-ci aussi.",
+    "C'est parti. Doucement.",
+    "Le monde peut attendre deux minutes.",
+    "Yep, c'est le matin.",
+    "Tu t'es levé(e). C'est déjà ça.",
   ],
 
   shower: [
-    "Ce moment chaud rien que pour toi.",
-    "Profites-en. C'est fait pour ça.",
-    "L'eau chaude, le silence. Ta parenthèse.",
-    "Prends tout le temps de ta douche. Je surveille le reste.",
+    "Douche. Tu sais comment ça marche.",
+    "L'eau chaude, puis la suite.",
+    "Prends le temps qu'il faut. Pas plus.",
+    "La meilleure partie du matin pour beaucoup de gens. Profites-en.",
   ],
 
   outfit: [
-    "La tenue qui te donne envie d'y aller.",
-    "Choisis ce dans quoi tu te sens toi.",
-    "Quelques minutes pour te construire.",
-    "Ce que tu mets dit quelque chose. Choisis bien.",
+    "Qu'est-ce qu'on met aujourd'hui.",
+    "Une tenue. N'importe laquelle ira.",
+    "Le truc que tu porteras toute la journée. Choisis bien-ish.",
+    "Pas besoin que ce soit parfait.",
   ],
 
   breakfast: [
-    "Mange quelque chose de bien. Pour de vrai.",
-    "Le carburant de tout le reste.",
-    "Ce n'est pas optionnel. Prends soin de toi.",
-    "Un bon matin commence par là.",
+    "Mange quelque chose.",
+    "Ton cerveau fonctionne mieux avec du carburant, c'est prouvé.",
+    "Même un truc rapide. C'est suffisant.",
+    "Petit-déj. On ne négocie pas avec ça.",
   ],
 
   grooming: [
-    "Ton moment de soin. Prends-le.",
-    "Pas besoin de te justifier. C'est important.",
-    "La version de toi que tu veux présenter.",
-    "Ce détail qui change tout.",
+    "Deux minutes pour toi. Pas trois, deux.",
+    "La partie où tu décides de ce que les autres voient en premier.",
+    "Fais ce que t'as à faire.",
+    "On s'occupe du reste.",
   ],
 
   bag: [
-    "Clés, téléphone, ce dont tu as besoin. Pas plus.",
-    "Check rapide. Rien oublié.",
-    "Rassemble-toi. Tu es presque prêt(e).",
-    "Le sac, les clés, et tu es entier(e).",
+    "Clés. Téléphone. Le reste.",
+    "Check rapide : t'as tout ?",
+    "Le moment où on réalise qu'on a oublié quelque chose.",
+    "Sac. Clés. C'est tout ce qui compte là.",
   ],
 
   ready: [
-    "Dernière vérification. Tu as tout.",
-    "Presque. Encore une seconde.",
-    "Clés en main. C'est le moment.",
-    "Tu as pensé à tout. Je m'en suis assuré(e).",
+    "Clés en main ?",
+    "Vérifie une dernière fois. Juste une.",
+    "Presque.",
+    "C'est bon.",
   ],
 
   leave: [
-    "C'est le moment. Tu es prêt(e).",
-    "Bonne route. Tu vas assurer.",
-    "Je t'ai gardé toute la marge qu'il faut. Pars serein(e).",
-    "Le plus dur c'était de se lever. Le reste, c'est bon.",
+    "C'est l'heure.",
+    "Bonne route.",
+    "Tu l'as fait.",
+    "Vas-y, t'es prêt(e).",
   ],
 
   nudge: [
-    "Toujours en cours ? Pas de souci, prends le temps.",
-    "Je suis là. Quand tu es prêt(e), dis-le moi.",
-    "Aucune urgence. Je t'attends.",
-    "Tu as le temps. Confirme quand c'est bon pour toi.",
+    "Toujours là ? Pas de souci.",
+    "Tu prends le temps qu'il te faut.",
+    "On est pas pressés. Enfin si, un peu. Mais ça va.",
+    "Confirme quand c'est bon.",
   ],
 
   slip: [
-    "On a pris un peu plus de temps. Ta marge absorbe. La suite est prête.",
-    "Pas d'inquiétude, j'ai réajusté la suite.",
-    "Un peu plus long que prévu. C'est géré.",
+    "On a pris un peu plus de temps. C'est absorbé, la suite est ajustée.",
+    "Légèrement hors plan. Rien de grave, j'ai recalculé.",
   ],
 
   feedback_early: [
-    "Tu avais de la marge. Je le note pour la prochaine fois.",
-    "En avance. Je m'en souviens.",
+    "En avance. Je note.",
+    "Avec de la marge. Bon réflexe.",
   ],
 
   feedback_ontime: [
-    "Pile. C'est exactement ça.",
-    "Parfait. On recommence comme ça.",
+    "Pile. Exactement ça.",
+    "Dans les temps. C'est tout ce qu'on demandait.",
   ],
 
   feedback_late: [
-    "Un peu serré. Je préviendrai plus tôt la prochaine fois. C'est pour ça que je suis là.",
-    "Noté. La prochaine fois, je t'avance le signal.",
+    "Un peu serré. La prochaine fois je préviens plus tôt.",
+    "Juste. On ajuste pour la prochaine.",
   ],
+
+  // Apprentissage progressif (affiché sur l'écran insight
+  // selon le nombre de sessions)
+  learning_1:  "C'est notre première sortie ensemble. Je commence à apprendre.",
+  learning_5:  "Je commence à te connaître.",
+  learning_10: "Je te connais assez bien maintenant.",
 
 };
 
+// ─── TEXTES UI FIXES ────────────────────────────────────────────
+// Ces textes ne varient pas. Un seul endroit pour les modifier.
+
 export const UI = {
 
-  // Écran d'accueil
+  // Écran zéro (premier lancement)
+  zero_headline: "Certains matins, le temps fait ce qu'il veut.",
+  zero_subline:  "Je suis là pour ça.",
+  zero_cta:      "C'est parti",
+
+  // Accueil
   home_title_with_name: (name) => `${name}, à quelle heure dois-tu être là ?`,
-  home_title_anon: "À quelle heure dois-tu être là ?",
-  home_cta: "Préparer mon départ",
-  home_routine_label: "Ton rituel",
-  home_routine_sub: "Tout est prêt. Lance ton guide du jour.",
-  home_routine_cta: "Lancer mon rituel",
-  home_routine_link: "Mon trajet habituel",
-  home_studio_link: "Le Studio · ma routine",
-  home_social_link: "Mes proches",
+  home_title_anon:      "À quelle heure dois-tu être là ?",
+  home_cta:             "Préparer mon départ",
+  home_profile_hint:    (emoji, name, count) =>
+    `${emoji} ${name} · ${count} étapes`,
+  home_routine_label:   "Rituel du jour",
+  home_routine_sub:     "Tout est prêt. Lance.",
 
-  // Écran aperçu
-  preview_label: "Ton départ",
-  preview_arrival_label: "Heure d'arrivée",
-  preview_transport_label: "Comment tu t'y rends",
-  preview_travel_label: "Durée du trajet",
-  preview_subtitle: (time) => `Lève-toi vers ${time} et tout s'enchaîne.`,
-  preview_body: "Je te guiderai à la voix. Tu n'as rien à surveiller.",
-  preview_wakelock_notice: "Pose ton téléphone où tu peux le voir. Je m'occupe du reste à la voix. Si tu me fermes, je t'attends sans bruit.",
-  preview_margin_notice: "Une marge de sécurité est déjà là-dedans. Tu arriveras serein(e).",
-  preview_sequence_label: "Ta séquence",
-  preview_cta: "Lancer mon guide",
-  preview_back: "Retour",
-  preview_learned: (mins) => `Appris : ${mins} min`,
+  // Aperçu
+  preview_subtitle:       (time) => `Lève-toi vers ${time}.`,
+  preview_body:           "Je guide étape par étape. Tu n'as rien à surveiller.",
+  preview_wakelock:       "Pose ton téléphone où tu peux le voir. Je guide à la voix. Si tu fermes l'app, j'attends sans sonner.",
+  preview_margin:         "Marge de sécurité incluse.",
+  preview_cta:            "C'est parti",
 
-  // Transports
-  transport_walk: "À pied",
-  transport_bike: "Vélo",
-  transport_car: "Voiture",
-  transport_transit: "Transports",
+  // Live
+  live_label:             "En ce moment",
+  live_next_prefix:       "ensuite ·",
+  live_confirm_idle:      (next) => `Passer à ${next}`,
+  live_confirm_suggested: (next) => `C'est bon · ${next}`,
+  live_confirm_leave:     "Je pars",
+  live_hint_idle:         "L'app attend ton signal.",
+  live_hint_suggested:    "C'est le bon moment. Confirme quand tu y es.",
+  live_skip:              "Passer",
+  live_stop:              "Aujourd'hui c'est différent.",
+  live_stop_confirm:      "Ok. À demain.",
 
-  // Mode live
-  live_current_label: "En ce moment",
-  live_next_prefix: "ensuite ·",
-  live_confirm_idle: (nextLabel) => `J'ai fini · passer à ${nextLabel}`,
-  live_confirm_suggested: (nextLabel) => `J'enchaîne · ${nextLabel}`,
-  live_confirm_leave: "C'est bon, je pars",
-  live_confirm_hint_idle: "L'app attend ton signal. Elle n'avance jamais sans toi.",
-  live_confirm_hint_suggested: "C'est le bon moment, mais rien ne presse. Confirme quand tu y es.",
-  live_quit: "Quitter le guide",
-
-  // Écran départ
-  leave_label: "C'est le moment",
-  leave_title: "C'est le moment de partir.",
-  leave_cta: "Je pars maintenant",
-  leave_arrival: (time) => `Arrivée prévue pour ${time}.`,
-  leave_slip: (time) => `On a pris un peu plus de temps. Ta marge a absorbé. Arrivée pour ${time}.`,
+  // Départ
+  leave_title:     "C'est l'heure.",
+  leave_cta:       "Je pars",
+  leave_arrival:   (time) => `Arrivée prévue pour ${time}.`,
+  leave_slip:      (time) => `La marge a absorbé. Arrivée pour ${time}.`,
+  leave_signal:    "Prévenir quelqu'un ?",
 
   // Feedback
-  feedback_label: "Tu y es",
-  feedback_title: "Comment ça s'est passé ?",
-  feedback_body: "Une question. Elle me sert à mieux te préparer la prochaine fois.",
-  feedback_cta_idle: "Choisis une réponse",
-  feedback_cta_ready: "Terminer",
-  feedback_early_label: "En avance, tranquille",
-  feedback_ontime_label: "Pile à l'heure",
-  feedback_late_label: "Un peu juste",
+  feedback_title:        "Ça s'est passé comment ?",
+  feedback_body:         "Une question. Elle sert à calibrer la prochaine fois.",
+  feedback_cta_idle:     "Choisis",
+  feedback_cta_ready:    "Ok",
+  feedback_early_label:  "En avance",
+  feedback_ontime_label: "À l'heure",
+  feedback_late_label:   "Un peu juste",
 
   // Insight
-  insight_label: "Doucement, ça apprend",
-  insight_rate: (pct) => `Tu es à l'heure ${pct}% du temps.`,
-  insight_first: "Première sortie enregistrée.",
-  insight_learned_title: "Ce que j'ai appris sur toi",
-  insight_learned_empty: "Encore quelques départs et je te montrerai tes vraies durées.",
-  insight_learned_privacy: "Calculé sur ton téléphone. Tes données ne sortent jamais d'ici.",
-  insight_history_label: "Tes 7 dernières sorties",
-  insight_back: "Retour à l'accueil",
-  insight_was: (mins) => `était ${mins}`,
-  insight_mean: (mins) => `${mins} min`,
-  insight_mean_var: (mins, variance) => `${mins} min (±${variance})`,
+  insight_rate:    (pct) => `À l'heure ${pct}% du temps.`,
+  insight_first:   "Première sortie. On commence.",
+  insight_learned: "Ce que j'ai appris",
+  insight_privacy: "Calculé sur ton téléphone. Rien ne sort d'ici.",
+  insight_history: "Les 7 dernières sorties",
 
-  // Routine
-  routine_label: "Mon rituel",
-  routine_title: "Ton trajet habituel",
-  routine_body: "Configure-le une fois. Je le proposerai les bons jours sans que tu y penses.",
-  routine_arrival_label: "Heure d'arrivée",
-  routine_travel_label: "Durée du trajet",
-  routine_days_label: "Jours",
-  routine_evening_label: "Aperçu du soir",
-  routine_evening_sub: "Un rappel doux la veille de ta première sortie.",
-  routine_cta: "Enregistrer mon rituel",
-  routine_clear: "Retirer le rituel",
-  routine_back: "Retour",
-  routine_saved: "Rituel enregistré.",
-  routine_cleared: "Rituel retiré.",
+  // Studio
+  studio_title:   "Compose ta routine",
+  studio_body:    "Glisse pour réordonner. Touche pour modifier.",
+  studio_add:     "Ajouter une étape",
+  studio_save:    "Sauvegarder",
+  studio_saved:   "✓ Sauvegardé",
+  studio_preview: "Prévisualiser",
+  studio_total:   (n, dur) => `${n} étapes · ${dur} min`,
 
-  // Social
-  social_label: "Mes proches",
-  social_title: "Un fil ténu vers ceux qui comptent",
-  social_privacy: "Aucun serveur. L'app ouvre ta messagerie avec le message prêt. Tu vois exactement ce qui sera envoyé, et tu appuies sur Envoyer toi-même. Rien ne part sans ton accord explicite.",
-  social_guardrail: "Le social célèbre. Il ne surveille pas.",
-  social_guardrail_full: "Tes proches ne reçoivent que des signaux positifs. Jamais de retard, jamais de position. Le social célèbre, il ne surveille pas.",
-  social_leave_nearby: "Prévenir quelqu'un ?",
-  social_back: "Retour",
+  // Mes proches
+  social_title:    "Mes proches",
+  social_subtitle: "Un fil ténu vers ceux qui comptent.",
+  social_body:     "Quand tu pars à l'heure, tu peux choisir de le dire.",
+  social_privacy:  "L'app ouvre ta messagerie avec le message prêt. Tu envoies toi-même. Rien ne part sans ton accord.",
+  social_add:      "Ajouter un proche",
+  social_sent:     "✓ Messagerie ouverte",
+  social_send:     "🌿 Envoyer",
+  social_guardrail:"Signal positif uniquement. Jamais de retard, jamais de position.",
 
-  // Nom
-  name_placeholder: "Comment tu t'appelles ?",
-  name_cta: "Commencer",
+  // Routine récurrente
+  routine_title:  "Trajet habituel",
+  routine_body:   "Configure une fois. Je propose les bons jours.",
+  routine_save:   "Enregistrer",
+  routine_evening:"Rappel du soir",
 
-  // Wordmark
-  wordmark: "Douce heure",
 };
