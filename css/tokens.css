@@ -8,6 +8,7 @@
 
   /* Fonds */
   --bg:           #0f0d0b;
+  --bg-studio:    #110e0b;
   --bg-grad:      radial-gradient(ellipse 160% 80% at 50% -10%,
                     #1a1510 0%, #0f0d0b 60%);
   --surface:      #181410;

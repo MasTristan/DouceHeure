@@ -112,7 +112,8 @@ export const UI = {
   home_routine_label: "Ton rituel",
   home_routine_sub: "Tout est prêt. Lance ton guide du jour.",
   home_routine_cta: "Lancer mon rituel",
-  home_routine_link: "Mon rituel",
+  home_routine_link: "Mon trajet habituel",
+  home_studio_link: "Le Studio · ma routine",
   home_social_link: "Mes proches",
 
   // Écran aperçu
