@@ -527,7 +527,7 @@ function buildLeaveContacts(contacts, slip) {
               live.sentContactIds.add(c.id);
               renderLeave(slip);
             },
-          }, 'Envoyer'),
+          }, 'Ouvrir'),
     ]);
   });
 
@@ -849,7 +849,7 @@ function showSocial() {
         isSent
           ? el('div', { class: 'social-send-btn is-sent' }, '✓ Messagerie ouverte')
           : el('button', { class: 'social-send-btn', onclick: () => handleSend(c) },
-              '🌿 Envoyer le signal de départ'),
+              '🌿 Ouvrir ma messagerie'),
       ]);
     });
 
@@ -954,6 +954,35 @@ function showSocial() {
       saveBtn.disabled = !draft.name.trim() || !draft.number.trim();
     }
 
+    // Contact Picker API — pas de prompt séparé : l'OS affiche son sélecteur natif.
+    // Disponible sur iOS Safari 14.5+ et Chrome Android 80+.
+    const hasContactPicker = 'contacts' in navigator;
+
+    async function pickContact() {
+      try {
+        const results = await navigator.contacts.select(['name', 'tel'], { multiple: false });
+        if (!results?.length) return;
+        const picked = results[0];
+        if (picked.name?.[0]) {
+          const firstName = picked.name[0].trim().split(/\s+/)[0];
+          draft.name = firstName;
+          nameInput.value = firstName;
+        }
+        if (picked.tel?.[0]) {
+          draft.number = picked.tel[0].trim();
+          numberInput.value = draft.number;
+        }
+        updateSaveBtn();
+      } catch {
+        // Annulé ou API non disponible
+      }
+    }
+
+    const pickerBtn = hasContactPicker
+      ? el('button', { class: 'social-picker-btn', onclick: pickContact },
+          '📱 Depuis mes contacts')
+      : null;
+
     const templateItems = MESSAGE_TEMPLATES.map((tpl, i) =>
       el('button', {
         class: 'social-template-item' + (draft.messageIdx === i ? ' is-selected' : ''),
@@ -965,6 +994,8 @@ function showSocial() {
       el('div', { class: 'studio-modal__handle' }),
       el('div', { class: 't-label' }, isNew ? 'Nouveau proche' : 'Modifier'),
       el('div', { class: 'spacer-sm' }),
+      pickerBtn,
+      pickerBtn ? el('div', { class: 'spacer-sm' }) : null,
       el('div', { class: 't-label', style: 'font-size:11px;margin-bottom:6px' }, 'Prénom'),
       nameInput,
       el('div', { class: 'spacer-sm' }),
