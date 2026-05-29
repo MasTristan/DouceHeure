@@ -33,7 +33,8 @@ function defaultState() {
     profiles: makeDefaultProfiles(),
     activeProfileId: 'profile_default',
     history: [],
-    routine: null
+    routine: null,
+    contacts: [],
   };
 }
 
@@ -62,7 +63,15 @@ export function migrateIfNeeded(state) {
     if (!state.profiles.find((p) => p.id === state.activeProfileId)) {
       state.activeProfileId = state.profiles[0]?.id;
     }
+    if (!state.contacts) {
+      state.contacts = [];
+      saveState(state);
+    }
     return state;
+  }
+
+  if (!state.contacts) {
+    state.contacts = [];
   }
 
   const existingSteps = state.steps || structuredClone(DEFAULT_STEPS);

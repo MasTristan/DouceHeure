@@ -1232,3 +1232,302 @@ body.in-studio {
   color: var(--amber);
   background: rgba(232,180,80,0.1);
 }
+
+/* ECRAN MES PROCHES */
+
+.social-contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.social-contact-card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  transition: border-color var(--dur-fast) var(--ease-soft);
+}
+
+.social-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.social-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.social-avatar--sm {
+  width: 38px;
+  height: 38px;
+  font-size: 13px;
+}
+
+.social-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.social-card-name {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.social-card-meta {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.social-card-edit,
+.social-card-delete {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition:
+    background var(--dur-fast) var(--ease-soft),
+    color var(--dur-fast) var(--ease-soft);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.social-card-edit:hover {
+  background: var(--surface-hi);
+  color: var(--text);
+}
+
+.social-card-delete:hover {
+  background: rgba(232,100,90,0.12);
+  color: #e87a70;
+}
+
+.social-card-preview {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text-mid);
+  font-style: italic;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.social-send-btn {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--amber-dk);
+  border: 1px solid var(--amber-mid);
+  color: var(--amber);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-soft);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.social-send-btn:hover {
+  background: rgba(232,180,80,0.15);
+}
+
+.social-send-btn.is-sent {
+  background: var(--green-dk);
+  border-color: var(--green-mid);
+  color: var(--green);
+  cursor: default;
+}
+
+.social-add-btn {
+  display: block;
+  width: 100%;
+  padding: 14px 16px;
+  background: none;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-mid);
+  cursor: pointer;
+  text-align: center;
+  transition:
+    border-color var(--dur-fast) var(--ease-soft),
+    color var(--dur-fast) var(--ease-soft);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.social-add-btn:hover {
+  border-color: var(--border-hi);
+  color: var(--text);
+}
+
+.social-guardrail {
+  padding: var(--space-sm) 0 0;
+}
+
+.social-guardrail__line {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(200,70,70,0.35), transparent);
+  margin-bottom: 10px;
+}
+
+.social-guardrail__text {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.social-channel-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.social-template-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.social-template-item {
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background var(--dur-fast) var(--ease-soft),
+    border-color var(--dur-fast) var(--ease-soft);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.social-template-item em {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text-mid);
+  line-height: 1.55;
+  font-style: italic;
+}
+
+.social-template-item.is-selected {
+  background: var(--amber-dk);
+  border-color: var(--amber-mid);
+}
+
+.social-template-item.is-selected em {
+  color: var(--amber);
+}
+
+/* Carte mini contact sur l'écran de départ */
+
+.social-leave-section {
+  padding-bottom: var(--space-sm);
+}
+
+.social-leave-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.social-mini-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  transition: all var(--dur-fast) var(--ease-soft);
+}
+
+.social-mini-card.is-sent {
+  border-color: var(--green-mid);
+  background: rgba(125,224,160,0.04);
+}
+
+.social-mini-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.social-mini-name {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.social-mini-msg {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.social-mini-send {
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--amber-dk);
+  border: 1px solid var(--amber-mid);
+  color: var(--amber);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  min-height: 44px;
+  transition: background var(--dur-fast) var(--ease-soft);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.social-mini-send:hover {
+  background: rgba(232,180,80,0.15);
+}
+
+.social-mini-sent {
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(125,224,160,0.08);
+  border: 1px solid var(--green-mid);
+  color: var(--green);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}

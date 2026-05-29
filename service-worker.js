@@ -1,7 +1,7 @@
 // Service Worker : cache hors-ligne UNIQUEMENT.
 // Pas de notifications, pas de push, pas de background sync (cf. CLAUDE.md, R3.2).
 
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = `douce-heure-${VERSION}`;
 
 const ASSETS = [
@@ -18,6 +18,7 @@ const ASSETS = [
   './js/plan.js',
   './js/ui.js',
   './js/studio.js',
+  './js/social.js',
   './js/copy.js',
   './js/audio.js',
   './js/wakelock.js',
