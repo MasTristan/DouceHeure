@@ -191,14 +191,13 @@ export const UI = {
   routine_saved: "Rituel enregistré.",
   routine_cleared: "Rituel retiré.",
 
-  // Social (maquette)
+  // Social
   social_label: "Mes proches",
-  social_mockup_banner: "Cette fonction est conçue mais pas encore active. Elle arrivera après validation du reste.",
-  social_title: "Un fil ténu vers tes proches",
-  social_body: "Un proche peut recevoir un signal discret quand tu pars à l'heure. Rien d'autre : pas de localisation, pas de retard partagé.",
-  social_signal_label: "Bien parti(e) à l'heure",
-  social_signal_sub: "C'est tout ce que ton proche verra.",
+  social_title: "Un fil ténu vers ceux qui comptent",
+  social_privacy: "Aucun serveur. L'app ouvre ta messagerie avec le message prêt. Tu vois exactement ce qui sera envoyé, et tu appuies sur Envoyer toi-même. Rien ne part sans ton accord explicite.",
   social_guardrail: "Le social célèbre. Il ne surveille pas.",
+  social_guardrail_full: "Tes proches ne reçoivent que des signaux positifs. Jamais de retard, jamais de position. Le social célèbre, il ne surveille pas.",
+  social_leave_nearby: "Prévenir quelqu'un ?",
   social_back: "Retour",
 
   // Nom

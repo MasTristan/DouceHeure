@@ -8,6 +8,7 @@ import { onFeedback } from './predict.js';
 import * as audio from './audio.js';
 import * as wake from './wakelock.js';
 import { pick, UI } from './copy.js';
+import { CHANNELS, MESSAGE_TEMPLATES, sendSignal } from './social.js';
 
 const root = document.getElementById('app');
 
@@ -259,6 +260,7 @@ function startLive(plan) {
     nudged: false,
     suggestedAnnounced: false,
     currentSlipMsg: null,
+    sentContactIds: new Set(),
     ctx,
   };
   wake.acquire();
@@ -478,18 +480,61 @@ function renderLeave(slip) {
     el('p', { class: 't-label', style: 'text-align:center' }, arrivalTxt),
   ]);
 
+  // Section contacts (spec §7) : affichée uniquement si l'utilisateur a des proches.
+  const contacts = loadState().contacts || [];
+  const contactsSection = contacts.length > 0
+    ? buildLeaveContacts(contacts, slip)
+    : null;
+
   const screen = el('main', { class: 'screen' }, [
     wordmark(),
     el('div', { class: 'spacer-md' }),
     el('div', { class: 't-label' }, UI.leave_label),
     el('div', { class: 'spacer-sm' }),
     halo,
+    contactsSection ? el('div', { class: 'spacer-md' }) : null,
+    contactsSection,
     el('div', { style: 'flex: 1' }),
     el('button', { class: 'btn btn--primary', onclick: confirmNext }, UI.leave_cta),
     el('div', { class: 'spacer-sm' }),
     el('button', { class: 'btn btn--ghost', onclick: abortLive }, UI.live_quit),
   ]);
   render(screen, 'live');
+}
+
+function buildLeaveContacts(contacts, slip) {
+  const miniCards = contacts.map((c) => {
+    const isSent = live.sentContactIds.has(c.id);
+    const msg = MESSAGE_TEMPLATES[c.messageIdx ?? 0]();
+    const initials = c.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+    const hue = c.name.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % 360;
+
+    return el('div', { class: 'social-mini-card' + (isSent ? ' is-sent' : '') }, [
+      el('div', {
+        class: 'social-avatar social-avatar--sm',
+        style: `background: hsl(${hue}, 35%, 25%); color: hsl(${hue}, 60%, 75%);`,
+      }, initials),
+      el('div', { class: 'social-mini-info' }, [
+        el('div', { class: 'social-mini-name' }, c.name),
+        el('em', { class: 'social-mini-msg' }, `« ${msg} »`),
+      ]),
+      isSent
+        ? el('div', { class: 'social-mini-sent' }, '✓ envoyé')
+        : el('button', {
+            class: 'social-mini-send',
+            onclick: () => {
+              sendSignal(c);
+              live.sentContactIds.add(c.id);
+              renderLeave(slip);
+            },
+          }, 'Envoyer'),
+    ]);
+  });
+
+  return el('div', { class: 'social-leave-section' }, [
+    el('div', { class: 't-label', style: 'margin-bottom: 10px' }, UI.social_leave_nearby),
+    el('div', { class: 'social-leave-list' }, miniCards),
+  ]);
 }
 
 function endLive() {
@@ -738,38 +783,214 @@ export function showRoutine() {
   renderR();
 }
 
-// ECRAN SOCIAL (maquette)
+// ECRAN SOCIAL
 
 function showSocial() {
-  const screen = el('main', { class: 'screen stagger' }, [
-    wordmark(),
-    el('div', { class: 'spacer-md' }),
-    el('div', { class: 't-label' }, UI.social_label),
-    el('div', { class: 'spacer-sm' }),
-    el('h1', { class: 't-display' }, UI.social_title),
-    el('p', { class: 't-body', style: 'margin-top: 12px' }, UI.social_body),
-    el('div', { class: 'spacer-md' }),
+  // sentTimes : Map<id, timestamp> pour l'état "envoyé" 4 secondes (local, non persisté).
+  const sentTimes = new Map();
+  let modalNode = null;
 
-    el('div', { class: 'mockup-banner' }, [
-      el('div', { class: 'mockup-banner__icon' }, 'ⓘ'),
-      el('div', { class: 'mockup-banner__text' }, UI.social_mockup_banner),
-    ]),
-    el('div', { class: 'spacer-md' }),
+  function renderSocial() {
+    const state = loadState();
+    const contacts = state.contacts || [];
 
-    el('div', { class: 'card card--accent' }, [
-      el('div', { class: 't-label' }, UI.social_signal_label),
+    function openModal(contact) {
+      const draft = contact
+        ? { ...contact }
+        : { id: '', name: '', number: '', channel: 'sms', messageIdx: 0 };
+      renderModal(draft);
+    }
+
+    function deleteContact(id) {
+      const s = loadState();
+      s.contacts = (s.contacts || []).filter((c) => c.id !== id);
+      saveState(s);
+      renderSocial();
+    }
+
+    function handleSend(contact) {
+      sendSignal(contact);
+      sentTimes.set(contact.id, Date.now());
+      renderSocial();
+      setTimeout(() => { if (currentScreen === 'social') renderSocial(); }, 4200);
+    }
+
+    const contactCards = contacts.map((c) => {
+      const isSent = sentTimes.has(c.id) && (Date.now() - sentTimes.get(c.id)) < 4000;
+      const channel = CHANNELS.find((ch) => ch.key === c.channel) || CHANNELS[0];
+      const msg = MESSAGE_TEMPLATES[c.messageIdx ?? 0]();
+      const initials = c.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+      const hue = c.name.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % 360;
+
+      const avatar = el('div', {
+        class: 'social-avatar',
+        style: `background: hsl(${hue}, 35%, 25%); color: hsl(${hue}, 60%, 75%);`,
+      }, initials);
+
+      return el('div', { class: 'social-contact-card' }, [
+        el('div', { class: 'social-card-header' }, [
+          avatar,
+          el('div', { class: 'social-card-info' }, [
+            el('div', { class: 'social-card-name' }, c.name),
+            el('div', { class: 'social-card-meta' }, `${channel.emoji} ${channel.label} · ${c.number}`),
+          ]),
+          el('button', {
+            class: 'social-card-edit',
+            onclick: () => openModal(c),
+            'aria-label': 'Modifier',
+          }, '✎'),
+          el('button', {
+            class: 'social-card-delete',
+            onclick: () => deleteContact(c.id),
+            'aria-label': 'Supprimer',
+          }, '×'),
+        ]),
+        el('p', { class: 'social-card-preview' }, `« ${msg} »`),
+        isSent
+          ? el('div', { class: 'social-send-btn is-sent' }, '✓ Messagerie ouverte')
+          : el('button', { class: 'social-send-btn', onclick: () => handleSend(c) },
+              '🌿 Envoyer le signal de départ'),
+      ]);
+    });
+
+    const canAdd = contacts.length < 5;
+
+    const screen = el('main', { class: 'screen stagger' }, [
+      el('div', { class: 'studio-topbar' }, [
+        wordmark(),
+        el('button', { class: 'studio-back-btn', onclick: showHome }, '← Retour'),
+      ]),
+      el('div', { class: 'spacer-md' }),
+      el('div', { class: 't-label' }, UI.social_label),
       el('div', { class: 'spacer-sm' }),
-      el('div', { class: 't-body' }, UI.social_signal_sub),
-    ]),
-    el('div', { class: 'spacer-md' }),
+      el('h1', { class: 't-display' }, UI.social_title),
+      el('div', { class: 'spacer-md' }),
+      el('div', { class: 'callout callout--amber' }, [
+        el('div', { class: 'callout__icon' }, '🔒'),
+        el('div', { class: 'callout__text' }, UI.social_privacy),
+      ]),
+      el('div', { class: 'spacer-md' }),
+      contacts.length > 0
+        ? el('div', { class: 'social-contact-list' }, contactCards)
+        : null,
+      contacts.length > 0 ? el('div', { class: 'spacer-sm' }) : null,
+      canAdd
+        ? el('button', { class: 'social-add-btn', onclick: () => openModal(null) },
+            '+ Ajouter un proche')
+        : null,
+      el('div', { style: 'flex: 1' }),
+      el('div', { class: 'social-guardrail' }, [
+        el('div', { class: 'social-guardrail__line' }),
+        el('p', { class: 'social-guardrail__text' }, UI.social_guardrail_full),
+      ]),
+      el('div', { class: 'spacer-sm' }),
+    ]);
+    render(screen, 'social');
+  }
 
-    el('div', { class: 'callout callout--amber' }, [
-      el('div', { class: 'callout__icon' }, '🤝'),
-      el('div', { class: 'callout__text' }, UI.social_guardrail),
-    ]),
+  function renderModal(draft) {
+    if (modalNode) modalNode.remove();
 
-    el('div', { style: 'flex: 1' }),
-    el('button', { class: 'btn btn--ghost', onclick: showHome }, UI.social_back),
-  ]);
-  render(screen, 'social');
+    const isNew = !draft.id;
+
+    function closeModal() {
+      if (!modalNode) return;
+      modalNode.style.transition = 'opacity 180ms';
+      modalNode.style.opacity = '0';
+      const node = modalNode;
+      setTimeout(() => { node.remove(); if (modalNode === node) modalNode = null; }, 200);
+    }
+
+    function save() {
+      if (!draft.name.trim() || !draft.number.trim()) return;
+      const s = loadState();
+      s.contacts = s.contacts || [];
+      if (isNew) {
+        draft.id = Date.now().toString();
+        s.contacts.push({ ...draft });
+      } else {
+        const idx = s.contacts.findIndex((c) => c.id === draft.id);
+        if (idx >= 0) s.contacts[idx] = { ...draft };
+      }
+      saveState(s);
+      closeModal();
+      renderSocial();
+    }
+
+    const channelPills = CHANNELS.map((ch) =>
+      el('button', {
+        class: 'pill' + (draft.channel === ch.key ? ' is-on' : ''),
+        onclick: () => { draft.channel = ch.key; renderModal(draft); },
+      }, [
+        el('span', {}, ch.emoji),
+        el('span', {}, ch.label),
+      ])
+    );
+
+    const isTelegram = draft.channel === 'telegram';
+    const nameInput = el('input', {
+      class: 'text-input',
+      type: 'text',
+      placeholder: 'Prénom',
+      value: draft.name,
+      oninput: (e) => { draft.name = e.target.value; updateSaveBtn(); },
+    });
+    const numberInput = el('input', {
+      class: 'text-input',
+      type: isTelegram ? 'text' : 'tel',
+      placeholder: isTelegram ? '@pseudo ou +33...' : '+33 6...',
+      value: draft.number,
+      oninput: (e) => { draft.number = e.target.value; updateSaveBtn(); },
+    });
+
+    const saveBtn = el('button', {
+      class: 'btn btn--primary',
+      style: 'flex:1',
+      disabled: (!draft.name.trim() || !draft.number.trim()) ? true : null,
+      onclick: save,
+    }, isNew ? 'Ajouter' : 'Enregistrer');
+
+    function updateSaveBtn() {
+      saveBtn.disabled = !draft.name.trim() || !draft.number.trim();
+    }
+
+    const templateItems = MESSAGE_TEMPLATES.map((tpl, i) =>
+      el('button', {
+        class: 'social-template-item' + (draft.messageIdx === i ? ' is-selected' : ''),
+        onclick: () => { draft.messageIdx = i; renderModal(draft); },
+      }, el('em', {}, `« ${tpl()} »`))
+    );
+
+    const sheet = el('div', { class: 'studio-modal__sheet' }, [
+      el('div', { class: 'studio-modal__handle' }),
+      el('div', { class: 't-label' }, isNew ? 'Nouveau proche' : 'Modifier'),
+      el('div', { class: 'spacer-sm' }),
+      el('div', { class: 't-label', style: 'font-size:11px;margin-bottom:6px' }, 'Prénom'),
+      nameInput,
+      el('div', { class: 'spacer-sm' }),
+      el('div', { class: 't-label', style: 'font-size:11px;margin-bottom:6px' }, 'Canal préféré'),
+      el('div', { class: 'social-channel-grid' }, channelPills),
+      el('div', { class: 'spacer-sm' }),
+      el('div', { class: 't-label', style: 'font-size:11px;margin-bottom:6px' }, 'Numéro ou pseudo'),
+      numberInput,
+      el('div', { class: 'spacer-sm' }),
+      el('div', { class: 't-label', style: 'font-size:11px;margin-bottom:6px' }, 'Message envoyé'),
+      el('div', { class: 'social-template-list' }, templateItems),
+      el('div', { class: 'spacer-md' }),
+      el('div', { style: 'display:flex;gap:10px' }, [
+        el('button', { class: 'btn btn--ghost', style: 'flex:1', onclick: closeModal }, 'Annuler'),
+        saveBtn,
+      ]),
+    ]);
+
+    modalNode = el('div', {
+      class: 'studio-modal',
+      onclick: (e) => { if (e.target === modalNode) closeModal(); },
+    }, sheet);
+
+    document.body.appendChild(modalNode);
+    setTimeout(() => nameInput.focus(), 60);
+  }
+
+  renderSocial();
 }
