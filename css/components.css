@@ -1402,6 +1402,29 @@ body.in-studio {
   line-height: 1.6;
 }
 
+.social-picker-btn {
+  display: block;
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-mid);
+  cursor: pointer;
+  text-align: center;
+  transition:
+    border-color var(--dur-fast) var(--ease-soft),
+    color var(--dur-fast) var(--ease-soft);
+  -webkit-tap-highlight-color: transparent;
+}
+.social-picker-btn:hover {
+  border-color: var(--border-hi);
+  color: var(--text);
+}
+
 .social-channel-grid {
   display: flex;
   gap: 8px;
