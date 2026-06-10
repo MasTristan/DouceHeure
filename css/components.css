@@ -1554,3 +1554,465 @@ body.in-studio {
   display: flex;
   align-items: center;
 }
+
+/* ════════════════════════════════════════════════════════════════
+   v2 · Composants de la spec Pro Max (Live flagship, chevet, etc.)
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Le geste de confirmation : appui tenu (spec v2 §7.2) ──────── */
+
+.hold-btn {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  min-height: 64px;            /* cible >= 64px, zone du pouce */
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius-lg);
+  background: var(--surface-hi);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: calc(16px * var(--base-scale));
+  cursor: pointer;
+  touch-action: none;
+  transition: transform var(--dur-fast) var(--ease-out),
+              border-color var(--dur-mid) var(--ease-out),
+              box-shadow var(--dur-mid) var(--ease-out);
+}
+.hold-btn__label {
+  position: relative;
+  z-index: 1;
+}
+.hold-btn__fill {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--hold-x, 50%) 50%,
+    var(--amber) 0%, var(--amber-mid) 100%);
+  opacity: 0.92;
+  clip-path: circle(0% at var(--hold-x, 50%) 50%);
+  transition: clip-path 120ms var(--ease-out);
+}
+.hold-btn.is-holding .hold-btn__fill {
+  /* Remplissage radial de lumière depuis le point de contact, 600 ms. */
+  clip-path: circle(140% at var(--hold-x, 50%) 50%);
+  transition: clip-path 600ms linear;
+}
+.hold-btn.is-holding {
+  transform: scale(0.985);
+}
+.hold-btn.is-holding .hold-btn__label {
+  color: var(--bg);
+}
+.hold-btn.is-spring {
+  /* Relâche élastique si interrompu : rien n'avance, rien ne s'écrit. */
+  animation: holdSpring 300ms var(--ease-spring);
+}
+@keyframes holdSpring {
+  0%   { transform: scale(0.985); }
+  55%  { transform: scale(1.012); }
+  100% { transform: scale(1); }
+}
+.hold-btn.state-suggested {
+  border-color: var(--amber-mid);
+  box-shadow: var(--shadow-amber);
+}
+
+/* ── Le mot (spec v2 §7.1) ─────────────────────────────────────── */
+
+.screen--live {
+  min-height: 100dvh;
+}
+
+.live-word {
+  text-align: left;
+}
+.live-word.is-new {
+  animation: screenIn var(--dur-slow) var(--ease-out) both;
+}
+.live-word.state-suggested .t-step {
+  color: var(--amber);
+  transition: color var(--dur-crawl) linear;
+}
+.live-word.state-nudge-pulse {
+  animation: nudgePulse 2.4s var(--ease-soft) 1;
+}
+@keyframes nudgePulse {
+  0%, 100% { filter: brightness(1); }
+  35%      { filter: brightness(1.35); }
+}
+
+.live-bottom-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.live-bottom-links .btn {
+  flex: 1;
+  font-size: calc(13px * var(--base-scale));
+}
+
+/* ── Carte de rattrapage (F3) : non bloquante, douce ───────────── */
+
+.rescue-card {
+  background: var(--surface-hi);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  animation: screenIn var(--dur-mid) var(--ease-out) both;
+}
+.rescue-card__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── Tiroir de séquence (spec v2 §7.4) ─────────────────────────── */
+
+.drawer__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.drawer-item.is-past {
+  /* Passées en lumière, à venir en pénombre. */
+  border-color: var(--border-hi);
+  color: var(--amber);
+  opacity: 0.95;
+}
+.drawer-item:not(.is-past) {
+  opacity: 0.78;
+}
+.drawer-item__label {
+  flex: 1;
+  font-size: calc(15px * var(--base-scale));
+}
+.drawer-item__emoji { font-size: 18px; }
+.drawer-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.drawer-move {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-hi);
+  color: var(--text-mid);
+  font-size: 15px;
+  cursor: pointer;
+}
+.drawer-skip {
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-mid);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: calc(12px * var(--base-scale));
+  font-family: var(--font-body);
+  cursor: pointer;
+  min-height: 34px;
+}
+.drawer-skip:active { background: var(--surface-hi); }
+
+/* ── Checklist de départ (spec v2 §7.7) ────────────────────────── */
+
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: calc(15px * var(--base-scale));
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.checklist-item__box {
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  border: 1.75px solid var(--border-hi);
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  transition: all var(--dur-fast) var(--ease-spring);
+}
+.checklist-item.is-done .checklist-item__box {
+  background: var(--amber);
+  border-color: var(--amber);
+}
+.checklist-item.is-done .checklist-item__box::after {
+  content: '✓';
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 700;
+}
+.checklist-item.is-done {
+  border-color: var(--border-hi);
+  color: var(--text-mid);
+}
+
+/* ── Accueil v2 ────────────────────────────────────────────────── */
+
+.next-departure__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--amber);
+}
+.next-departure__head .t-title,
+.next-departure__head .t-meta {
+  color: var(--text);
+}
+.next-departure__head .t-meta {
+  color: var(--text-mid);
+}
+.home-links {
+  display: flex;
+  gap: 10px;
+}
+.home-links .btn {
+  flex: 1;
+  font-size: calc(13px * var(--base-scale));
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+/* ── Constellation (spec v2 §10) ───────────────────────────────── */
+
+.constellation {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: radial-gradient(ellipse 120% 90% at 50% 110%,
+    var(--amber-glow) 0%, transparent 60%);
+  overflow: hidden;
+}
+.constellation svg {
+  display: block;
+  width: 100%;
+  height: 220px;
+}
+
+/* ── Carte du matin ────────────────────────────────────────────── */
+
+.card-preview-wrap {
+  display: flex;
+  justify-content: center;
+}
+.card-preview {
+  width: min(58%, 230px);
+  height: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-hi);
+  box-shadow: var(--shadow-card);
+}
+
+/* ── Réglages ──────────────────────────────────────────────────── */
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+}
+.setting-row + .setting-row {
+  border-top: 1px solid var(--border);
+}
+.url-sample {
+  display: block;
+  font-size: 11px;
+  word-break: break-all;
+  color: var(--text-mid);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+
+/* ── Archétypes (onboarding + studio) ──────────────────────────── */
+
+.archetype-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--amber);
+  font-family: var(--font-body);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--dur-fast) var(--ease-out),
+              transform var(--dur-fast) var(--ease-spring);
+}
+.archetype-card:active { transform: scale(0.98); }
+.archetype-card.is-selected {
+  border-color: var(--amber-mid);
+  background: var(--surface-hi);
+  box-shadow: var(--shadow-amber);
+}
+
+/* ── Studio v2 ─────────────────────────────────────────────────── */
+
+.kind-pill {
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: calc(11px * var(--base-scale));
+  font-family: var(--font-body);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  flex-shrink: 0;
+  min-height: 30px;
+}
+.kind-pill.is-core {
+  color: var(--amber);
+  border-color: var(--amber-mid);
+  background: var(--amber-dk);
+}
+
+.studio-step__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.studio-step__row--dur {
+  margin-top: 10px;
+  padding-left: 4px;
+}
+.studio-step.is-inactive {
+  opacity: 0.5;
+}
+
+.dur-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  width: 100%;
+  height: 28px;
+  background: transparent;
+  cursor: pointer;
+}
+.dur-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-hi);
+}
+.dur-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -10px;
+  border-radius: 50%;
+  background: var(--amber);
+  border: none;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.35);
+}
+.dur-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-hi);
+}
+.dur-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--amber);
+  border: none;
+}
+
+.studio-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Scène Nuit · mode chevet (spec v2 §3.8) ───────────────────── */
+
+.screen--night {
+  position: relative;
+  align-items: center;
+  text-align: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.night-clock {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-variation-settings: 'opsz' 144;
+  font-size: clamp(64px, 22vw, 110px);
+  font-weight: 400;
+  color: var(--amber);            /* braise très sombre en scène nuit */
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+.night-clock--waking {
+  color: var(--text);
+  animation: wakePulse 4s ease-in-out infinite;
+}
+.night-wake-time {
+  color: var(--text-mid);
+}
+.night-hint {
+  color: var(--text-mid);
+  padding-bottom: 18px;
+}
+.night-veil {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+@keyframes wakePulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+.screen--waking.is-pulsing .night-clock {
+  animation: wakePulse 4s ease-in-out infinite;
+}
+
+/* ── Toast (complément) ────────────────────────────────────────── */
+
+.toast .toast__title { color: var(--text); }
+
+/* ── Réduction de mouvement : le remplissage de l'appui tenu reste
+     fonctionnel mais sans animation longue. ───────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .hold-btn.is-holding .hold-btn__fill {
+    transition-duration: 150ms;
+  }
+}

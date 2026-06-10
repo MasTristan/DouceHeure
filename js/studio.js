@@ -1,9 +1,13 @@
-// Le Studio : compositeur de routine.
+// Le Studio v2 : compositeur de départs (spec v2 §14).
 // Toute la logique et le rendu du Studio sont isolés ici.
 
-import { loadState, saveState } from './store.js';
-import { buildPlan } from './plan.js';
+import { loadState, saveState, ARCHETYPES, makeProfileFromArchetype, makeChecklist, MAX_PROFILES, MAX_STEPS } from './store.js';
+import { buildPlan, TRANSPORT_BUFFER } from './plan.js';
+import { addDestination } from './travel.js';
 import { fromMin } from './time.js';
+import { icon, STEP_ICON_CHOICES, TRANSPORT_ICONS } from './icons.js';
+import * as haptics from './haptics.js';
+import { UI } from './copy.js';
 
 // --- Helper DOM ---
 
@@ -13,7 +17,7 @@ function el(tag, attrs = {}, children = []) {
     if (k === 'class') node.className = v;
     else if (k === 'html') node.innerHTML = v;
     else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
-    else if (v !== undefined && v !== null) node.setAttribute(k, v);
+    else if (v !== undefined && v !== null && v !== false) node.setAttribute(k, v === true ? '' : v);
   }
   for (const c of [].concat(children)) {
     if (c == null || c === false) continue;
@@ -24,116 +28,43 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
-// --- Constantes ---
-
-const MAX_PROFILES = 3;
-const MAX_STEPS = 8;
-const EMOJI_SUGGESTIONS = [
-  '🧘','🐱','🐶','🪴','📚','🎵','💊','🧃','🥗','🧴',
-  '🏃','🚴','✏️','🎨','🧹','💻','📱','🪞','🛁','☕',
-  '🍳','🥐','🫖','🧺','👟','🎯','🌿','🕯️','🎸','🌅'
-];
-
-const PROFILE_PRESETS = [
-  { name: 'Routine complète', emoji: '✨' },
-  { name: 'Routine rapide',   emoji: '⚡' },
-  { name: 'Routine du weekend', emoji: '🌸' },
-];
-
 // --- État du Studio ---
 
-let studioProfiles = [];
+let studioState = null;
 let studioActiveId = null;
-let openPickerStepKey = null;
 
-// --- API ---
-
-export function loadProfiles() {
-  const state = loadState();
-  return { profiles: state.profiles || [], activeId: state.activeProfileId || 'default' };
+function activeProfile() {
+  return studioState.profiles.find((p) => p.id === studioActiveId);
 }
 
-export function saveProfiles(profiles, activeId) {
-  const state = loadState();
-  state.profiles = profiles;
-  state.activeProfileId = activeId;
-  saveState(state);
+function autosave() {
+  saveState(studioState);
 }
 
-export function createStep(emoji, label, dur) {
+// --- Logique pure (exportée pour clarté et réutilisation) ---
+
+export function createStep(iconName, label, dur) {
   return {
     key: `free-${Date.now()}`,
     label,
-    emoji,
+    icon: iconName,
+    emoji: null,
     est: Math.max(2, dur),
     active: true,
     fixed: false,
+    kind: 'comfort',
     real: [],
   };
 }
 
-export function reorderSteps(profiles, activeId, fromIdx, toIdx) {
-  const profile = profiles.find((p) => p.id === activeId);
-  if (!profile) return profiles;
-  const steps = [...profile.steps];
-  const last = steps.length - 1;
-  // Constrain so fixed wakeup stays first and ready stays last.
+export function reorderSteps(steps, fromIdx, toIdx) {
+  const next = [...steps];
+  const last = next.length - 1;
+  // Le réveil reste premier, l'étape finale reste dernière.
   const clampedTo = Math.max(1, Math.min(last - 1, toIdx));
-  const [moved] = steps.splice(fromIdx, 1);
-  steps.splice(clampedTo, 0, moved);
-  profile.steps = steps;
-  return [...profiles];
-}
-
-export function addStep(profiles, activeId, step) {
-  const profile = profiles.find((p) => p.id === activeId);
-  if (!profile) return profiles;
-  // Insert before the last fixed step (ready).
-  const lastFixed = profile.steps.length - 1;
-  profile.steps.splice(lastFixed, 0, step);
-  return [...profiles];
-}
-
-export function removeStep(profiles, activeId, stepKey) {
-  const profile = profiles.find((p) => p.id === activeId);
-  if (!profile) return profiles;
-  const step = profile.steps.find((s) => s.key === stepKey);
-  if (!step || step.fixed) return profiles;
-  profile.steps = profile.steps.filter((s) => s.key !== stepKey);
-  return [...profiles];
-}
-
-export function setDuration(profiles, activeId, stepKey, delta) {
-  const profile = profiles.find((p) => p.id === activeId);
-  if (!profile) return profiles;
-  const step = profile.steps.find((s) => s.key === stepKey);
-  if (!step) return profiles;
-  step.est = Math.max(2, step.est + delta);
-  return [...profiles];
-}
-
-export function renameStep(profiles, activeId, stepKey, label) {
-  const profile = profiles.find((p) => p.id === activeId);
-  if (!profile) return profiles;
-  const step = profile.steps.find((s) => s.key === stepKey);
-  if (!step || step.fixed) return profiles;
-  step.label = label.trim().slice(0, 32) || step.label;
-  return [...profiles];
-}
-
-export function setEmoji(profiles, activeId, stepKey, emoji) {
-  const profile = profiles.find((p) => p.id === activeId);
-  if (!profile) return profiles;
-  const step = profile.steps.find((s) => s.key === stepKey);
-  if (!step || step.fixed) return profiles;
-  step.emoji = emoji;
-  return [...profiles];
-}
-
-// --- Sauvegarde automatique ---
-
-function autosave() {
-  saveProfiles(studioProfiles, studioActiveId);
+  const [moved] = next.splice(fromIdx, 1);
+  next.splice(clampedTo, 0, moved);
+  return next;
 }
 
 // --- Drag and drop (touch + mouse) ---
@@ -142,27 +73,21 @@ let drag = null;
 
 function initDrag(cardEl, idx, listEl) {
   function onStart(clientY) {
-    const rect = cardEl.getBoundingClientRect();
-    const clone = cardEl.cloneNode(true);
+    const rect = cardEl.closest('.studio-step').getBoundingClientRect();
+    const card = cardEl.closest('.studio-step');
+    const clone = card.cloneNode(true);
     clone.style.cssText = `
       position: fixed; left: ${rect.left}px; top: ${rect.top}px;
-      width: ${rect.width}px; opacity: 0.88;
+      width: ${rect.width}px; opacity: 0.9;
       transform: scale(1.02); z-index: 999;
       pointer-events: none; transition: none;
       border-radius: var(--radius-lg);
-      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+      box-shadow: var(--shadow-amber), 0 12px 40px rgba(0,0,0,0.45);
     `;
     document.body.appendChild(clone);
-    cardEl.style.opacity = '0.35';
-    drag = {
-      idx,
-      startY: clientY,
-      offsetY: clientY - rect.top,
-      clone,
-      card: cardEl,
-      listEl,
-      dropIdx: idx,
-    };
+    card.style.opacity = '0.35';
+    haptics.buzz('tap'); // lift
+    drag = { idx, offsetY: clientY - rect.top, clone, card, listEl, dropIdx: idx };
   }
 
   function onMove(clientY) {
@@ -179,13 +104,11 @@ function initDrag(cardEl, idx, listEl) {
       }
     }
     if (!found) drag.dropIdx = cards.length - 1;
-    // Constrain to non-fixed slots (1 .. length-2).
-    const profile = studioProfiles.find((p) => p.id === studioActiveId);
+    const profile = activeProfile();
     if (profile) {
       const last = profile.steps.length - 1;
       drag.dropIdx = Math.max(1, Math.min(last - 1, drag.dropIdx));
     }
-    // Visual indicator on cards.
     cards.forEach((c, i) => {
       c.classList.toggle('drag-target', i === drag.dropIdx && i !== drag.idx);
     });
@@ -200,13 +123,14 @@ function initDrag(cardEl, idx, listEl) {
     drag = null;
     listEl.querySelectorAll('.studio-step').forEach((c) => c.classList.remove('drag-target'));
     if (fromIdx !== dropIdx) {
-      studioProfiles = reorderSteps(studioProfiles, studioActiveId, fromIdx, dropIdx);
+      haptics.buzz('tap'); // drop
+      const profile = activeProfile();
+      profile.steps = reorderSteps(profile.steps, fromIdx, dropIdx);
       autosave();
       renderStudio();
     }
   }
 
-  // Touch events (iOS).
   cardEl.addEventListener('touchstart', (e) => {
     onStart(e.touches[0].clientY);
   }, { passive: true });
@@ -215,7 +139,6 @@ function initDrag(cardEl, idx, listEl) {
   }, { passive: false });
   document.addEventListener('touchend', () => { if (drag) onEnd(); }, { passive: true });
 
-  // Mouse events (desktop).
   cardEl.addEventListener('mousedown', (e) => {
     e.preventDefault();
     onStart(e.clientY);
@@ -226,53 +149,37 @@ function initDrag(cardEl, idx, listEl) {
   });
 }
 
-// --- Emoji picker ---
+// --- Picker d'icône ---
 
-function buildEmojiPicker(stepKey, anchorEl) {
+function buildIconPicker(anchorEl, onPick) {
   const existing = document.querySelector('.emoji-picker');
-  if (existing) existing.remove();
-  if (openPickerStepKey === stepKey) {
-    openPickerStepKey = null;
-    return;
-  }
-  openPickerStepKey = stepKey;
+  if (existing) { existing.remove(); return; }
 
   const grid = el('div', { class: 'emoji-picker__grid', role: 'grid' },
-    EMOJI_SUGGESTIONS.map((e) =>
+    STEP_ICON_CHOICES.map((name) =>
       el('button', {
         class: 'emoji-picker__item',
-        'aria-label': e,
-        onclick: () => {
-          studioProfiles = setEmoji(studioProfiles, studioActiveId, stepKey, e);
-          autosave();
-          openPickerStepKey = null;
-          renderStudio();
-        },
-      }, e)
+        'aria-label': name,
+        onclick: () => { picker.remove(); onPick(name); },
+      }, icon(name))
     )
   );
 
   const picker = el('div', {
-    class: 'emoji-picker',
-    role: 'dialog',
-    'aria-modal': 'true',
-    'aria-label': 'Choisir un emoji',
+    class: 'emoji-picker', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Choisir une icône',
   }, [
     grid,
-    el('button', { class: 'emoji-picker__close', onclick: () => { picker.remove(); openPickerStepKey = null; } }, 'Fermer'),
+    el('button', { class: 'emoji-picker__close', onclick: () => picker.remove() }, 'Fermer'),
   ]);
 
-  // Position below anchor.
   const rect = anchorEl.getBoundingClientRect();
-  picker.style.cssText = `position: fixed; top: ${rect.bottom + 6}px; left: ${rect.left}px; z-index: 200;`;
+  picker.style.cssText = `position: fixed; top: ${Math.min(rect.bottom + 6, innerHeight - 260)}px; left: ${Math.min(rect.left, innerWidth - 280)}px; z-index: 300;`;
   document.body.appendChild(picker);
 
-  // Close on outside tap.
   setTimeout(() => {
     document.addEventListener('click', function outside(ev) {
       if (!picker.contains(ev.target)) {
         picker.remove();
-        openPickerStepKey = null;
         document.removeEventListener('click', outside);
       }
     });
@@ -285,149 +192,146 @@ function openAddStepModal() {
   const existing = document.querySelector('.studio-modal');
   if (existing) existing.remove();
 
-  let newEmoji = '✏️';
+  let newIcon = 'star';
   let newLabel = '';
   let newDur = 10;
 
-  function rebuild() {
-    modal.querySelector('.add-step-preview-emoji').textContent = newEmoji;
-    modal.querySelector('.add-step-label-input').value = newLabel;
-    modal.querySelector('.add-step-dur-value').textContent = newDur + ' min';
-    modal.querySelector('.add-step-dur-input').value = String(newDur);
-    const addBtn = modal.querySelector('.add-step-submit');
-    addBtn.disabled = newLabel.trim().length === 0;
-    addBtn.style.opacity = newLabel.trim().length === 0 ? '0.4' : '1';
-  }
-
-  const emojiBtn = el('button', {
+  const iconBtn = el('button', {
     class: 'add-step-emoji-btn',
-    'aria-label': 'Choisir un emoji',
+    'aria-label': 'Choisir une icône',
     onclick: (e) => {
       e.stopPropagation();
-      buildAddModalEmojiPicker(emojiBtn, (chosen) => {
-        newEmoji = chosen;
-        rebuild();
+      buildIconPicker(iconBtn, (chosen) => {
+        newIcon = chosen;
+        iconBtn.replaceChildren(icon(chosen, 'icon--lg'));
       });
     },
-  }, newEmoji);
+  }, icon(newIcon, 'icon--lg'));
 
   const labelInput = el('input', {
-    class: 'text-input add-step-label-input',
-    type: 'text',
-    placeholder: 'Nom de l\'étape',
-    maxlength: '32',
-    'aria-label': 'Nom de l\'étape',
-    oninput: (e) => { newLabel = e.target.value; rebuild(); },
+    class: 'text-input', type: 'text', placeholder: 'Nom de l\'étape',
+    maxlength: '32', 'aria-label': 'Nom de l\'étape',
+    oninput: (e) => {
+      newLabel = e.target.value;
+      addBtn.disabled = newLabel.trim().length === 0;
+    },
   });
 
+  const durValue = el('div', { class: 'add-step-dur-value' }, newDur + ' min');
   const durInput = el('input', {
-    class: 'add-step-dur-input',
-    type: 'range',
-    min: '2',
-    max: '45',
-    value: String(newDur),
-    'aria-label': 'Durée en minutes',
-    oninput: (e) => { newDur = Number(e.target.value); rebuild(); },
+    class: 'dur-slider', type: 'range', min: '2', max: '45', step: '1',
+    value: String(newDur), 'aria-label': 'Durée en minutes',
+    oninput: (e) => {
+      const v = Number(e.target.value);
+      if (v !== newDur) haptics.buzz('crank');
+      newDur = v;
+      durValue.textContent = newDur + ' min';
+    },
   });
 
   const addBtn = el('button', {
-    class: 'btn btn--primary add-step-submit',
-    disabled: true,
+    class: 'btn btn--primary', disabled: true,
     onclick: () => {
       if (!newLabel.trim()) return;
-      const profile = studioProfiles.find((p) => p.id === studioActiveId);
-      if (profile && profile.steps.length >= MAX_STEPS) return;
-      const step = createStep(newEmoji, newLabel.trim(), newDur);
-      studioProfiles = addStep(studioProfiles, studioActiveId, step);
+      const profile = activeProfile();
+      if (!profile || profile.steps.length >= MAX_STEPS) return;
+      const step = createStep(newIcon, newLabel.trim(), newDur);
+      profile.steps.splice(profile.steps.length - 1, 0, step);
       autosave();
       modal.remove();
       renderStudio();
     },
-  }, 'Ajouter à ma routine');
+  }, 'Ajouter');
 
   const modal = el('div', { class: 'studio-modal' }, [
     el('div', { class: 'studio-modal__sheet' }, [
       el('div', { class: 'studio-modal__handle' }),
       el('div', { class: 't-label', style: 'margin-bottom: 16px' }, 'Nouvelle étape'),
-      el('div', { class: 'add-step-row' }, [
-        el('div', { class: 'add-step-preview-emoji' }, newEmoji),
-        emojiBtn,
-        labelInput,
-      ]),
+      el('div', { class: 'add-step-row' }, [iconBtn, labelInput]),
       el('div', { class: 'spacer-md' }),
       el('div', { class: 'add-step-dur-row' }, [
         el('div', { class: 't-label' }, 'Durée'),
-        el('div', { class: 'add-step-dur-value' }, newDur + ' min'),
+        durValue,
       ]),
       el('div', { class: 'spacer-sm' }),
       durInput,
       el('div', { class: 'spacer-md' }),
       addBtn,
       el('div', { class: 'spacer-sm' }),
-      el('button', {
-        class: 'btn btn--ghost',
-        onclick: () => modal.remove(),
-      }, 'Annuler'),
+      el('button', { class: 'btn btn--ghost', onclick: () => modal.remove() }, 'Annuler'),
     ]),
   ]);
 
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) modal.remove();
-  });
-
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
   document.body.appendChild(modal);
   setTimeout(() => labelInput.focus(), 100);
 }
 
-function buildAddModalEmojiPicker(anchorEl, onPick) {
-  const existing = document.querySelector('.emoji-picker');
+// --- Choix d'archétype pour un nouveau départ ---
+
+function openArchetypeModal() {
+  const existing = document.querySelector('.studio-modal');
   if (existing) existing.remove();
 
-  const grid = el('div', { class: 'emoji-picker__grid' },
-    EMOJI_SUGGESTIONS.map((e) =>
-      el('button', {
-        class: 'emoji-picker__item',
-        onclick: (ev) => {
-          ev.stopPropagation();
-          anchorEl.textContent = e;
-          picker.remove();
-          onPick(e);
-        },
-      }, e)
-    )
-  );
-
-  const picker = el('div', { class: 'emoji-picker' }, [
-    grid,
-    el('button', { class: 'emoji-picker__close', onclick: () => picker.remove() }, 'Fermer'),
+  const modal = el('div', { class: 'studio-modal' }, [
+    el('div', { class: 'studio-modal__sheet' }, [
+      el('div', { class: 'studio-modal__handle' }),
+      el('div', { class: 't-label', style: 'margin-bottom: 16px' }, UI.studio_archetype_title),
+      el('div', { style: 'display:flex; flex-direction:column; gap:10px' },
+        ARCHETYPES.map((arch) =>
+          el('button', {
+            class: 'archetype-card',
+            onclick: () => {
+              const profile = makeProfileFromArchetype(arch);
+              studioState.profiles.push(profile);
+              studioActiveId = profile.id;
+              autosave();
+              modal.remove();
+              renderStudio();
+            },
+          }, [
+            icon(arch.icon, 'icon--lg'),
+            el('div', {}, [
+              el('div', { class: 'feedback-option__label' }, arch.name),
+              el('div', { class: 't-body t-body--sm' }, `${arch.stepKeys.length} étapes · ${arch.checklist.length} objets`),
+            ]),
+          ])
+        )
+      ),
+      el('div', { class: 'spacer-md' }),
+      el('button', { class: 'btn btn--ghost', onclick: () => modal.remove() }, 'Annuler'),
+    ]),
   ]);
 
-  const rect = anchorEl.getBoundingClientRect();
-  picker.style.cssText = `position: fixed; top: ${rect.bottom + 6}px; left: ${rect.left}px; z-index: 300;`;
-  document.body.appendChild(picker);
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
 }
 
-// --- Sheet de prévisualisation ---
+// --- Sheet d'aperçu du plan : timeline en métaphore lumière ---
 
 function openPreviewSheet() {
   const existing = document.querySelector('.studio-modal');
   if (existing) existing.remove();
 
-  const state = loadState();
-  const profile = studioProfiles.find((p) => p.id === studioActiveId);
+  const profile = activeProfile();
   if (!profile) return;
 
-  const arrival = '09:00';
-  const travel = 20;
-  const transport = 'car';
+  const arrival = profile.defaults.arrival || '09:00';
+  const transport = profile.defaults.transport || 'walk';
   const ctx = { day: 1, type: 'work' };
-  const plan = buildPlan(profile.steps, arrival, travel, transport, state.latenessScore, ctx);
+  const plan = buildPlan(profile.steps, arrival, 20, transport, studioState.latenessScore, ctx);
 
-  const items = plan.sequence.map((s) => {
+  const n = plan.sequence.length;
+  const items = plan.sequence.map((s, i) => {
     const isLeave = s.key === 'leave';
-    return el('div', { class: 'timeline-item' + (isLeave ? ' timeline-item--leave' : '') }, [
+    // Du début en pénombre à la fin éclairée.
+    const lum = 0.35 + (i / Math.max(1, n - 1)) * 0.65;
+    return el('div', {
+      class: 'timeline-item' + (isLeave ? ' timeline-item--leave' : ''),
+      style: `opacity: ${lum.toFixed(2)}`,
+    }, [
       el('div', { class: 'timeline-item__time' }, fromMin(s.at)),
-      el('div', { class: 'timeline-item__emoji' }, s.emoji || ''),
+      el('div', { class: 'timeline-item__emoji' }, s.emoji ? s.emoji : icon(s.icon)),
       el('div', { class: 'timeline-item__label' }, s.label),
     ]);
   });
@@ -435,31 +339,21 @@ function openPreviewSheet() {
   const modal = el('div', { class: 'studio-modal' }, [
     el('div', { class: 'studio-modal__sheet' }, [
       el('div', { class: 'studio-modal__handle' }),
-      el('div', { class: 't-label', style: 'margin-bottom: 16px' }, 'Aperçu'),
+      el('div', { class: 't-label', style: 'margin-bottom: 16px' }, UI.studio_preview),
       el('div', { style: 'display:flex; flex-direction:column; gap:8px' }, items),
-      el('div', { class: 'spacer-sm' }),
-      el('div', { class: 'callout' }, [
-        el('div', { class: 'callout__icon' }, 'ℹ️'),
-        el('div', { class: 'callout__text' }, 'Pour un départ à 09:00, trajet 20 min en voiture.'),
-      ]),
       el('div', { class: 'spacer-md' }),
       el('button', { class: 'btn btn--ghost', onclick: () => modal.remove() }, 'Fermer'),
     ]),
   ]);
 
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) modal.remove();
-  });
-
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
   document.body.appendChild(modal);
 }
 
-// --- Rendu d'une carte d'étape ---
+// --- Carte d'étape ---
 
 function buildStepCard(step, idx, profile, listEl) {
   const isDraggable = !step.fixed;
-  const isFirst = idx === 0;
-  const isLast = idx === profile.steps.length - 1;
 
   const handle = isDraggable
     ? el('div', { class: 'studio-step__handle', 'aria-label': 'Glisser pour réordonner', role: 'img' }, [
@@ -467,237 +361,326 @@ function buildStepCard(step, idx, profile, listEl) {
       ])
     : el('div', { class: 'studio-step__handle studio-step__handle--fixed' });
 
-  // Emoji button (tappable if not fixed).
-  let emojiEl;
-  if (!step.fixed) {
-    emojiEl = el('button', {
-      class: 'studio-step__emoji',
-      'aria-label': `Changer l'emoji de ${step.label}`,
-      onclick: (e) => buildEmojiPicker(step.key, e.currentTarget),
-    }, step.emoji);
-  } else {
-    emojiEl = el('div', { class: 'studio-step__emoji studio-step__emoji--fixed' }, step.emoji);
-  }
+  const iconEl = step.fixed
+    ? el('div', { class: 'studio-step__emoji studio-step__emoji--fixed' }, step.emoji ? step.emoji : icon(step.icon))
+    : el('button', {
+        class: 'studio-step__emoji',
+        'aria-label': `Changer l'icône de ${step.label}`,
+        onclick: (e) => buildIconPicker(e.currentTarget, (chosen) => {
+          step.icon = chosen;
+          step.emoji = null;
+          autosave();
+          renderStudio();
+        }),
+      }, step.emoji ? step.emoji : icon(step.icon));
 
-  // Label (tappable if not fixed, becomes inline input).
-  let labelEl;
-  if (!step.fixed) {
-    labelEl = el('button', {
-      class: 'studio-step__label',
-      'aria-label': `Modifier le nom : ${step.label}`,
-      onclick: (e) => startInlineEdit(e.currentTarget, step, idx),
-    }, step.label);
-  } else {
-    labelEl = el('div', { class: 'studio-step__label studio-step__label--fixed' }, step.label);
-  }
+  const labelEl = step.fixed
+    ? el('div', { class: 'studio-step__label studio-step__label--fixed' }, step.label)
+    : el('button', {
+        class: 'studio-step__label',
+        'aria-label': `Modifier le nom : ${step.label}`,
+        onclick: (e) => startInlineEdit(e.currentTarget, step),
+      }, step.label);
 
-  const durMinus = el('button', {
-    class: 'dur-btn',
-    'aria-label': `Diminuer la durée de ${step.label}`,
+  // Pill essentiel / confort (F3).
+  const kindPill = el('button', {
+    class: 'kind-pill' + (step.kind === 'core' ? ' is-core' : ''),
+    'aria-label': `${step.label} : ${step.kind === 'core' ? UI.studio_core : UI.studio_comfort}`,
     onclick: () => {
-      studioProfiles = setDuration(studioProfiles, studioActiveId, step.key, -1);
+      step.kind = step.kind === 'core' ? 'comfort' : 'core';
+      haptics.buzz('tap');
       autosave();
       renderStudio();
     },
-  }, '−');
+  }, step.kind === 'core' ? UI.studio_core : UI.studio_comfort);
 
-  const durValue = el('div', { class: 'studio-step__dur' }, step.est + ' min');
-
-  const durPlus = el('button', {
-    class: 'dur-btn',
-    'aria-label': `Augmenter la durée de ${step.label}`,
-    onclick: () => {
-      studioProfiles = setDuration(studioProfiles, studioActiveId, step.key, 1);
-      autosave();
-      renderStudio();
+  // Durée : slider à crans de 1 min (estimation de configuration,
+  // autorisée hors session).
+  const durValue = el('span', { class: 'studio-step__dur' }, step.est + ' min');
+  const durSlider = el('input', {
+    class: 'dur-slider dur-slider--sm', type: 'range',
+    min: '2', max: '60', step: '1', value: String(step.est),
+    'aria-label': `Durée de ${step.label} en minutes`,
+    oninput: (e) => {
+      const v = Number(e.target.value);
+      if (v !== step.est) haptics.buzz('crank');
+      step.est = v;
+      durValue.textContent = v + ' min';
     },
-  }, '+');
+    onchange: () => { autosave(); },
+  });
 
   const deleteBtn = !step.fixed
     ? el('button', {
         class: 'studio-step__delete',
         'aria-label': `Supprimer l'étape ${step.label}`,
         onclick: () => {
-          studioProfiles = removeStep(studioProfiles, studioActiveId, step.key);
+          profile.steps = profile.steps.filter((s) => s.key !== step.key);
           autosave();
           renderStudio();
         },
       }, '×')
     : null;
 
-  // Keyboard reorder buttons (visible only on focus).
-  const kbUp = !isFirst && !step.fixed
-    ? el('button', {
-        class: 'studio-step__kbmove',
-        'aria-label': `Monter ${step.label}`,
-        onclick: () => {
-          studioProfiles = reorderSteps(studioProfiles, studioActiveId, idx, idx - 1);
-          autosave();
-          renderStudio();
-        },
-      }, '↑')
-    : null;
-
-  const kbDown = !isLast && !step.fixed
-    ? el('button', {
-        class: 'studio-step__kbmove',
-        'aria-label': `Descendre ${step.label}`,
-        onclick: () => {
-          studioProfiles = reorderSteps(studioProfiles, studioActiveId, idx, idx + 1);
-          autosave();
-          renderStudio();
-        },
-      }, '↓')
-    : null;
+  const toggleActive = el('button', {
+    class: 'toggle ' + (step.active ? 'is-on' : 'is-off'),
+    role: 'switch',
+    'aria-checked': step.active ? 'true' : 'false',
+    'aria-label': `Activer ${step.label}`,
+    onclick: () => {
+      if (step.fixed) return;
+      step.active = !step.active;
+      autosave();
+      renderStudio();
+    },
+  }, [el('span', { class: 'toggle__thumb' })]);
 
   const card = el('div', {
-    class: 'studio-step' + (step.fixed ? ' studio-step--fixed' : ''),
+    class: 'studio-step' + (step.fixed ? ' studio-step--fixed' : '') + (!step.active ? ' is-inactive' : ''),
     'data-key': step.key,
   }, [
-    handle,
-    emojiEl,
-    labelEl,
-    el('div', { class: 'studio-step__dur-controls' }, [durMinus, durValue, durPlus]),
-    el('div', { class: 'studio-step__kbmoves' }, [kbUp, kbDown]),
-    deleteBtn,
+    el('div', { class: 'studio-step__row' }, [
+      handle,
+      iconEl,
+      labelEl,
+      kindPill,
+      step.fixed ? null : toggleActive,
+      deleteBtn,
+    ]),
+    el('div', { class: 'studio-step__row studio-step__row--dur' }, [
+      durSlider,
+      durValue,
+    ]),
   ]);
 
-  // Attach drag only to draggable cards, listening on the handle.
-  if (isDraggable) {
-    initDrag(handle, idx, listEl);
-  }
-
+  if (isDraggable) initDrag(handle, idx, listEl);
   return card;
 }
 
-function startInlineEdit(labelBtn, step, idx) {
+function startInlineEdit(labelBtn, step) {
   const original = step.label;
   const input = el('input', {
-    class: 'studio-step__label-input',
-    type: 'text',
-    value: original,
-    maxlength: '32',
-    'aria-label': 'Nom de l\'étape',
+    class: 'studio-step__label-input', type: 'text', value: original,
+    maxlength: '32', 'aria-label': 'Nom de l\'étape',
   });
 
-  function confirm() {
-    const val = input.value.trim();
-    studioProfiles = renameStep(studioProfiles, studioActiveId, step.key, val || original);
+  function confirmEdit() {
+    step.label = input.value.trim().slice(0, 32) || original;
     autosave();
     renderStudio();
   }
 
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); confirm(); }
-    if (e.key === 'Escape') { renderStudio(); }
+    if (e.key === 'Enter') { e.preventDefault(); confirmEdit(); }
+    if (e.key === 'Escape') renderStudio();
   });
-  input.addEventListener('blur', confirm);
+  input.addEventListener('blur', confirmEdit);
 
   labelBtn.replaceWith(input);
   input.focus();
   input.select();
 }
 
+// --- Checklist du profil ---
+
+function buildChecklistCard(profile) {
+  const items = (profile.checklist || []).map((item, i) =>
+    el('div', { class: 'studio-checklist-item' }, [
+      el('span', { class: 't-body', style: 'flex:1; color: var(--text)' }, item.label),
+      i > 0 ? el('button', {
+        class: 'studio-step__kbmove', 'aria-label': `Monter ${item.label}`,
+        onclick: () => {
+          [profile.checklist[i - 1], profile.checklist[i]] = [profile.checklist[i], profile.checklist[i - 1]];
+          autosave();
+          renderStudio();
+        },
+      }, '↑') : null,
+      i < profile.checklist.length - 1 ? el('button', {
+        class: 'studio-step__kbmove', 'aria-label': `Descendre ${item.label}`,
+        onclick: () => {
+          [profile.checklist[i + 1], profile.checklist[i]] = [profile.checklist[i], profile.checklist[i + 1]];
+          autosave();
+          renderStudio();
+        },
+      }, '↓') : null,
+      el('button', {
+        class: 'studio-step__delete', 'aria-label': `Supprimer ${item.label}`,
+        onclick: () => {
+          profile.checklist.splice(i, 1);
+          autosave();
+          renderStudio();
+        },
+      }, '×'),
+    ])
+  );
+
+  const input = el('input', {
+    class: 'text-input', type: 'text',
+    placeholder: UI.studio_checklist_placeholder, maxlength: '32',
+  });
+
+  return el('div', { class: 'card' }, [
+    el('div', { class: 't-label' }, UI.studio_checklist_label),
+    el('div', { class: 'spacer-sm' }),
+    ...items,
+    el('div', { class: 'spacer-sm' }),
+    el('div', { style: 'display:flex; gap:8px' }, [
+      input,
+      el('button', {
+        class: 'btn btn--soft', style: 'flex-shrink:0',
+        onclick: () => {
+          const label = input.value.trim();
+          if (!label) return;
+          profile.checklist = profile.checklist || [];
+          profile.checklist.push(makeChecklist([label])[0]);
+          autosave();
+          renderStudio();
+        },
+      }, '+'),
+    ]),
+  ]);
+}
+
+// --- Défauts du profil : arrivée, transport, destination ---
+
+function buildDefaultsCard(profile) {
+  return el('div', { class: 'card' }, [
+    el('div', { class: 't-label' }, UI.studio_defaults_label),
+    el('div', { class: 'spacer-sm' }),
+    el('div', { class: 't-label', style: 'font-size:10px' }, UI.studio_default_arrival),
+    el('div', { class: 'spacer-sm' }),
+    el('input', {
+      class: 'time-input', type: 'time', value: profile.defaults.arrival || '',
+      onchange: (e) => {
+        profile.defaults.arrival = e.target.value || null;
+        autosave();
+      },
+    }),
+    el('div', { class: 'spacer-md' }),
+    el('div', { class: 't-label', style: 'font-size:10px' }, UI.studio_default_transport),
+    el('div', { class: 'spacer-sm' }),
+    el('div', { style: 'display:flex; gap:8px; flex-wrap:wrap' },
+      Object.keys(TRANSPORT_BUFFER).map((k) =>
+        el('button', {
+          class: 'pill' + (profile.defaults.transport === k ? ' is-on' : ''),
+          onclick: () => {
+            profile.defaults.transport = k;
+            autosave();
+            renderStudio();
+          },
+        }, [icon(TRANSPORT_ICONS[k]), el('span', {}, UI['transport_' + k])])
+      )
+    ),
+    el('div', { class: 'spacer-md' }),
+    el('div', { class: 't-label', style: 'font-size:10px' }, UI.studio_default_destination),
+    el('div', { class: 'spacer-sm' }),
+    el('div', { style: 'display:flex; gap:8px; flex-wrap:wrap' }, [
+      el('button', {
+        class: 'pill' + (!profile.defaults.destinationId ? ' is-on' : ''),
+        onclick: () => { profile.defaults.destinationId = null; autosave(); renderStudio(); },
+      }, UI.preview_destination_none),
+      ...studioState.destinations.map((d) =>
+        el('button', {
+          class: 'pill' + (profile.defaults.destinationId === d.id ? ' is-on' : ''),
+          onclick: () => { profile.defaults.destinationId = d.id; autosave(); renderStudio(); },
+        }, d.label)
+      ),
+      el('button', {
+        class: 'pill',
+        onclick: () => {
+          const label = prompt(UI.preview_destination_prompt);
+          if (!label || !label.trim()) return;
+          const dest = addDestination(studioState, label);
+          profile.defaults.destinationId = dest.id;
+          autosave();
+          renderStudio();
+        },
+      }, UI.preview_destination_add),
+    ]),
+  ]);
+}
+
 // --- Rendu principal du Studio ---
 
-let saveConfirmTimeout = null;
-
 function renderStudio() {
-  const profile = studioProfiles.find((p) => p.id === studioActiveId);
+  const profile = activeProfile();
   if (!profile) return;
 
   const steps = profile.steps;
-  const totalDur = steps.reduce((a, s) => a + s.est, 0);
   const canAddStep = steps.length < MAX_STEPS;
-  const canAddProfile = studioProfiles.length < MAX_PROFILES;
+  const canAddProfile = studioState.profiles.length < MAX_PROFILES;
 
-  // Profile pills.
   const pills = [
-    ...studioProfiles.map((p) =>
+    ...studioState.profiles.map((p) =>
       el('button', {
         class: 'pill' + (p.id === studioActiveId ? ' is-on' : ''),
-        onclick: () => {
-          studioActiveId = p.id;
-          renderStudio();
-        },
-      }, [el('span', {}, p.emoji), el('span', {}, p.name)])
+        onclick: () => { studioActiveId = p.id; renderStudio(); },
+      }, [icon(p.icon), el('span', {}, p.name)])
     ),
     canAddProfile
       ? el('button', {
           class: 'pill studio-add-profile',
-          'aria-label': 'Ajouter un profil',
-          onclick: addProfile,
-        }, '+ Profil')
+          'aria-label': 'Ajouter un départ',
+          onclick: openArchetypeModal,
+        }, UI.studio_add_profile)
       : null,
   ].filter(Boolean);
 
-  // Step list.
   const listEl = el('div', { class: 'studio-step-list' });
   steps.forEach((step, idx) => {
     listEl.appendChild(buildStepCard(step, idx, profile, listEl));
   });
 
-  // Add step button.
   const addStepEl = canAddStep
-    ? el('button', {
-        class: 'studio-add-step',
-        onclick: openAddStepModal,
-      }, [
+    ? el('button', { class: 'studio-add-step', onclick: openAddStepModal }, [
         el('span', { class: 'studio-add-step__icon' }, '+'),
-        el('span', {}, 'Ajouter une étape libre'),
+        el('span', {}, UI.studio_add_step),
       ])
     : el('div', { class: 'studio-add-step studio-add-step--disabled' }, [
-        el('span', {}, 'Maximum 8 étapes atteint'),
+        el('span', {}, UI.studio_max_steps),
       ]);
 
-  // Save button.
-  const saveBtn = el('button', {
-    class: 'btn btn--primary studio-save-btn',
-    id: 'studio-save-btn',
-    onclick: () => {
-      autosave();
-      const btn = document.getElementById('studio-save-btn');
-      if (!btn) return;
-      btn.textContent = '✓ Sauvegardé';
-      btn.style.background = 'var(--green-dk)';
-      btn.style.color = 'var(--green)';
-      clearTimeout(saveConfirmTimeout);
-      saveConfirmTimeout = setTimeout(() => {
-        if (document.getElementById('studio-save-btn')) renderStudio();
-      }, 2000);
-    },
-  }, 'Sauvegarder');
+  const deleteProfileBtn = studioState.profiles.length > 1
+    ? el('button', {
+        class: 'btn btn--ghost', style: 'font-size:13px; opacity:0.7',
+        onclick: () => {
+          if (!confirm(`${UI.studio_delete_profile} ?`)) return;
+          studioState.profiles = studioState.profiles.filter((p) => p.id !== studioActiveId);
+          studioActiveId = studioState.profiles[0].id;
+          if (studioState.activeProfileId !== studioActiveId
+            && !studioState.profiles.find((p) => p.id === studioState.activeProfileId)) {
+            studioState.activeProfileId = studioActiveId;
+          }
+          autosave();
+          renderStudio();
+        },
+      }, UI.studio_delete_profile)
+    : null;
 
   const screen = el('main', { class: 'screen screen--studio stagger' }, [
     el('div', { class: 'studio-topbar' }, [
       el('div', { class: 'wordmark' }, [
         el('span', { class: 'wordmark__dot' }),
-        el('span', { class: 'wordmark__name' }, 'Douce heure'),
+        el('span', { class: 'wordmark__name' }, UI.wordmark),
       ]),
       el('button', {
-        class: 'btn--ghost studio-back-btn',
-        onclick: leaveStudio,
-        'aria-label': 'Retour',
-      }, '← Retour'),
+        class: 'studio-back-btn', onclick: leaveStudio, 'aria-label': 'Retour',
+      }, '← ' + UI.studio_back),
     ]),
 
     el('div', { class: 'spacer-md' }),
-    el('div', { class: 't-label' }, 'Le Studio'),
+    el('div', { class: 't-label' }, UI.studio_label),
     el('div', { class: 'spacer-sm' }),
-    el('h1', { class: 't-display' }, 'Compose ta routine'),
-    el('p', { class: 't-body', style: 'margin-top: 10px' },
-      'Glisse pour réordonner, touche pour modifier. Chaque changement est sauvegardé.'),
+    el('h1', { class: 't-display' }, UI.studio_title),
+    el('p', { class: 't-body', style: 'margin-top: 10px' }, UI.studio_body),
 
     el('div', { class: 'spacer-md' }),
-    el('div', { class: 't-label' }, 'Mes routines'),
+    el('div', { class: 't-label' }, UI.studio_profiles_label),
     el('div', { class: 'spacer-sm' }),
     el('div', { class: 'studio-profile-pills' }, pills),
 
     el('div', { class: 'spacer-md' }),
-    el('div', { class: 'studio-steps-header' }, [
-      el('div', { class: 't-label' }, `Étapes · ${steps.length}`),
-      el('div', { class: 'studio-total-dur' }, `Durée totale : ${totalDur} min`),
-    ]),
+    el('div', { class: 't-label' }, UI.studio_steps_label(steps.length)),
     el('div', { class: 'spacer-sm' }),
     listEl,
 
@@ -705,21 +688,16 @@ function renderStudio() {
     addStepEl,
 
     el('div', { class: 'spacer-md' }),
-    el('div', { style: 'display:flex; gap:10px' }, [
-      el('button', {
-        class: 'btn btn--soft',
-        style: 'flex:1',
-        onclick: openPreviewSheet,
-      }, '👁 Prévisualiser'),
-      el('div', { style: 'flex:1' }, saveBtn),
-    ]),
+    buildChecklistCard(profile),
+
+    el('div', { class: 'spacer-md' }),
+    buildDefaultsCard(profile),
+
+    el('div', { class: 'spacer-md' }),
+    el('button', { class: 'btn btn--soft', onclick: openPreviewSheet }, UI.studio_preview),
 
     el('div', { class: 'spacer-sm' }),
-    el('button', {
-      class: 'btn btn--ghost',
-      style: 'font-size:12px; opacity:0.6',
-      onclick: showRoutineSettings,
-    }, '⚙ Mon trajet habituel'),
+    deleteProfileBtn,
   ]);
 
   const root = document.getElementById('app');
@@ -731,63 +709,20 @@ function renderStudio() {
   root.replaceChildren(screen);
 }
 
-// --- Ajout d'un profil ---
-
-function addProfile() {
-  const used = studioProfiles.map((p) => p.name);
-  const preset = PROFILE_PRESETS.find((p) => !used.includes(p.name))
-    || { name: `Profil ${studioProfiles.length + 1}`, emoji: '🌿' };
-
-  // Clone steps from active profile, but reset real measurements.
-  const base = studioProfiles.find((p) => p.id === studioActiveId);
-  const clonedSteps = base
-    ? structuredClone(base.steps).map((s) => ({ ...s, real: [] }))
-    : [];
-
-  const newProfile = {
-    id: `profile-${Date.now()}`,
-    name: preset.name,
-    emoji: preset.emoji,
-    steps: clonedSteps,
-  };
-
-  studioProfiles = [...studioProfiles, newProfile];
-  studioActiveId = newProfile.id;
-  autosave();
-  renderStudio();
-}
-
 // --- Navigation ---
 
 function leaveStudio() {
   document.body.classList.remove('in-studio');
   const root = document.getElementById('app');
   if (root) delete root.dataset.screen;
-  import('./ui.js').then((m) => {
-    m.showHome();
-    // Remplace l'animation d'entrée par slideRight (retour depuis Studio).
-    const screen = root?.querySelector('main');
-    if (screen) {
-      screen.classList.remove('screen--enter');
-      screen.classList.add('screen--closing');
-    }
-  });
-}
-
-function showRoutineSettings() {
-  document.body.classList.remove('in-studio');
-  const root = document.getElementById('app');
-  if (root) delete root.dataset.screen;
-  import('./ui.js').then((m) => m.showRoutine());
+  import('./ui.js').then((m) => m.showHome());
 }
 
 // --- Point d'entrée ---
 
 export function showStudio() {
-  const { profiles, activeId } = loadProfiles();
-  studioProfiles = profiles;
-  studioActiveId = activeId;
-  openPickerStepKey = null;
+  studioState = loadState();
+  studioActiveId = studioState.activeProfileId;
   document.body.classList.add('in-studio');
   renderStudio();
 }

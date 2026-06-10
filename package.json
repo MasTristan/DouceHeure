@@ -1,0 +1,9 @@
+{
+  "name": "douce-heure",
+  "private": true,
+  "type": "module",
+  "description": "Web app d'aide à la ponctualité. Zéro dépendance runtime, ce fichier ne sert qu'aux tests node.",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}
