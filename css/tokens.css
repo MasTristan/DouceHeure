@@ -1,12 +1,12 @@
 /* css/tokens.css
-   Concept : la lumière qui se lève.
-   Palette brun chaud + ambre. Jamais froid, jamais générique.
-   Toute valeur définie ici est la source de vérité.
-   Ne pas coder de couleur en dur dans les autres fichiers. */
+   Lumière Vivante (spec v2 §3.1) : un seul fichier de tokens, quatre blocs
+   de scène appliqués via [data-scene] sur <html>. Aucune couleur en dur
+   ailleurs. La scène Nuit n'est jamais activée par l'horloge, uniquement
+   par le mode chevet (F1). */
 
 :root {
 
-  /* Fonds */
+  /* ── Scène Aube (défaut avant 8h) ───────────────────────────── */
   --bg:           #0f0d0b;
   --bg-studio:    #110e0b;
   --bg-grad:      radial-gradient(ellipse 160% 80% at 50% -10%,
@@ -15,8 +15,12 @@
   --surface-hi:   #221c16;
   --surface-glow: #2a2018;
 
-  /* Variables de session, interpolées dynamiquement par JS. */
-  --bg-session:   #0f0d0b;
+  /* Lumière de session, interpolée par js/scene.js.
+     --scene-l : luminosité 0 (lever) à 1 (départ).
+     --scene-warm : 0 froid/pâle (serré) à 1 doré (en avance). */
+  --scene-l:      0;
+  --scene-warm:   0.5;
+  --bg-session:   var(--bg);
   --glow-session: transparent;
 
   /* Bordures */
@@ -39,18 +43,26 @@
   /* Texte */
   --text:         #f2ead8;
   --text-mid:     #a09070;
-  --text-dim:     #6a5a46;
+  --text-dim:     #8a7a5e;
 
-  /* Statuts */
-  --status-ok:    #7de0a0;
-  --status-early: #7ab8e8;
-  --status-late:  #e8905a;
-  --status-amber: #e8c87a;
+  /* Statuts (constellation : doré à l'heure, bleu pâle en avance, cuivré en retard) */
+  --status-ok:    #e8c87a;
+  --status-early: #aac8e8;
+  --status-late:  #c08a5a;
+  --status-green: #7de0a0;
 
   /* Typographie */
   --font-display: 'Fraunces', serif;
   --font-body:    'Outfit', sans-serif;
   --font-accessible: 'Atkinson Hyperlegible', sans-serif;
+
+  /* Échelle typo (spec v2 §3.4) */
+  --t-hero:  clamp(44px, 12vw, 64px);
+  --t-step:  clamp(34px, 9vw, 46px);
+  --t-title: 22px;
+  --t-body:  16px;
+  --t-meta:  13px;
+  --base-scale: 1;
 
   /* Espacements */
   --space-xs:  6px;
@@ -82,11 +94,109 @@
   --shadow-green:  0 8px 32px rgba(125,224,160,0.16);
 }
 
-/* Mode lecture confortable */
+/* ── Scène Plein jour (8h à 18h) ──────────────────────────────────
+   Fond crème, encre chaude, ambre assombri pour le contraste.
+   AA partout, AAA sur le mot d'étape et le bouton de confirmation. */
+[data-scene='day'] {
+  --bg:           #f5efe3;
+  --bg-studio:    #f1eadb;
+  --bg-grad:      radial-gradient(ellipse 160% 80% at 50% -10%,
+                    #fbf6ec 0%, #f5efe3 60%);
+  --surface:      #efe7d5;
+  --surface-hi:   #e8dec8;
+  --surface-glow: #e2d4b6;
+
+  --border:       #d9cba9;
+  --border-hi:    #c0ab7e;
+  --border-focus: #8a6018;
+
+  --amber:        #8a6018;
+  --amber-mid:    #6e4c12;
+  --amber-dk:     #f0e2bd;
+  --amber-glow:   rgba(138, 96, 24, 0.10);
+
+  --green:        #1e6a40;
+  --green-mid:    #2d7a52;
+  --green-dk:     #d8ecdc;
+  --green-glow:   rgba(30, 106, 64, 0.10);
+
+  --text:         #2a2018;
+  --text-mid:     #5c4c34;
+  --text-dim:     #75643f;
+
+  --status-ok:    #8a6018;
+  --status-early: #3a6a96;
+  --status-late:  #8a5a30;
+  --status-green: #1e6a40;
+
+  --shadow-card:  0 2px 18px rgba(90, 70, 40, 0.12),
+                  0 1px 4px rgba(90, 70, 40, 0.08);
+  --shadow-amber: 0 8px 32px rgba(138, 96, 24, 0.14);
+  --shadow-green: 0 8px 32px rgba(30, 106, 64, 0.12);
+}
+
+/* ── Scène Veillée (après 18h) : variante lampe, plus rouge ─────── */
+[data-scene='evening'] {
+  --bg:           #120c0a;
+  --bg-studio:    #140d0a;
+  --bg-grad:      radial-gradient(ellipse 160% 80% at 50% -10%,
+                    #1e130c 0%, #120c0a 60%);
+  --surface:      #1a120c;
+  --surface-hi:   #241810;
+  --surface-glow: #2e1e12;
+
+  --border:       #32220f;
+  --border-hi:    #4e3416;
+  --border-focus: #8a5a24;
+
+  --amber:        #d9a45c;
+  --amber-mid:    #b5854a;
+  --amber-dk:     #3a260e;
+  --amber-glow:   rgba(217, 164, 92, 0.12);
+
+  --text:         #f0e6d2;
+  --text-mid:     #a08866;
+  --text-dim:     #8a7050;
+}
+
+/* ── Scène Nuit (mode chevet, F1) ─────────────────────────────────
+   Quasi-noir absolu pour OLED, éléments en braise très sombre,
+   aucun blanc. Jamais activée par l'horloge. */
+[data-scene='night'] {
+  --bg:           #000000;
+  --bg-studio:    #000000;
+  --bg-grad:      none;
+  --surface:      #0a0602;
+  --surface-hi:   #120b04;
+  --surface-glow: #1a1006;
+
+  --border:       #1a1006;
+  --border-hi:    #241608;
+  --border-focus: #3a2410;
+
+  --amber:        #3a2410;
+  --amber-mid:    #2e1c0c;
+  --amber-dk:     #120b04;
+  --amber-glow:   rgba(58, 36, 16, 0.2);
+
+  --text:         #4a2f14;
+  --text-mid:     #3a2410;
+  --text-dim:     #2e1c0c;
+
+  --shadow-card:  none;
+  --shadow-amber: none;
+  --shadow-green: none;
+}
+
+/* Mode lisible (spec v2 §3.4) : bascule de fonte, taille +12 %,
+   italique désactivé partout. */
 .readable {
   --font-display: 'Atkinson Hyperlegible', sans-serif;
+  --font-body:    'Atkinson Hyperlegible', sans-serif;
+  --base-scale:   1.12;
+  --t-body:       18px;
+  --t-meta:       15px;
 }
-.readable .t-display,
-.readable .t-step {
-  font-style: normal;
+.readable * {
+  font-style: normal !important;
 }
