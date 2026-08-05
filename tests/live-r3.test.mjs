@@ -8,8 +8,13 @@ import { installTinyDom, byClass, byExactText } from './tiny-dom.mjs';
 import { installFakeClock, resetClock } from '../js/clock.js';
 import { defaultState } from '../js/store.js';
 import { UI } from '../js/copy.js';
+import { resetLiveForTests } from '../js/live/controller.js';
 
-test.afterEach(() => resetClock());
+// live/controller.js est importé de façon statique par ui.js (jamais
+// réinstancié malgré le suffixe de requête ci-dessous, cf. son commentaire
+// sur resetLiveForTests) : sans ce reset, une session laissée ouverte par
+// un cas de test bloquerait silencieusement le suivant.
+test.afterEach(() => { resetClock(); resetLiveForTests(); });
 
 async function importFreshUi() {
   return import(`../js/ui.js?t=${Date.now()}-${Math.random()}`);

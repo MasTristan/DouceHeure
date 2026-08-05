@@ -19,8 +19,9 @@ import { installTinyDom, byClass } from './tiny-dom.mjs';
 import { installFakeClock, resetClock } from '../js/clock.js';
 import { defaultState } from '../js/store.js';
 import { COPY } from '../js/copy.js';
+import { resetLiveForTests } from '../js/live/controller.js';
 
-test.afterEach(() => resetClock());
+test.afterEach(() => { resetClock(); resetLiveForTests(); });
 
 async function importFreshUi() {
   return import(`../js/ui.js?t=${Date.now()}-${Math.random()}`);
@@ -47,6 +48,11 @@ function warmState() {
 }
 
 async function renderLiveScreen(dom, state) {
+  // live/controller.js est un singleton (import statique de ui.js, jamais
+  // réinstancié) : chaque test ici lance DEUX sessions (froide puis
+  // nourrie) dans le même cas, la deuxième doit donc trouver `live` déjà
+  // reparti à zéro, sinon startLive() no-op silencieusement (if (live) return;).
+  resetLiveForTests();
   const ui = await importFreshUi();
   ui.showPreview(state.activeProfileId);
   dom.fireEvent(byClass(dom.app, 'btn--primary'), 'click');

@@ -7,14 +7,17 @@ import * as haptics from './haptics.js';
 import * as speech from './speech.js';
 import * as scene from './scene.js';
 import { UI } from './copy.js';
-import { showHome, showPreview, showOnboarding, showBedsideSetup } from './ui.js';
+import { showHome, showPreview, showOnboarding, showBedsideSetup, showTrip, showFeedback } from './ui.js';
 import { registerScreens } from './ui/nav.js';
 
 // J1 découpe étape 3 (Nour, R1 §1.3) : registre de navigation rempli une
 // fois ici, au démarrage. Casse le cycle d'imports studio.js <-> ui.js
 // (studio.js appelait jusqu'ici import('./ui.js').then(m => m.showHome())
 // pour l'éviter ; il appelle désormais nav.home() directement).
-registerScreens({ home: showHome });
+// J1 découpe étape 4 : trip/feedback ajoutés pour que live/leave.js
+// (departNow) et live/controller.js (endLive) puissent y naviguer sans
+// importer ui.js (cycle interdit tant que ces écrans y restent).
+registerScreens({ home: showHome, trip: showTrip, feedback: showFeedback });
 
 // Service Worker pour le cache hors-ligne. Toast discret quand une mise à
 // jour est prête, jamais bloquant.

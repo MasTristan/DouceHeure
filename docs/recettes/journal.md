@@ -105,6 +105,47 @@ concret, `"Réveil 5"` contre `"Réveil 6"` — la divergence entre modèle froi
 nourri rendue visible caractère pour caractère, exactement ce que le test existe pour
 empêcher. Restauré.
 
+## J1 étape 4 · Découpe de `live/*`
+
+L'étape la plus risquée de la découpe (Nour, R1 §1.4) : `js/ui.js` faisait vivre
+`startLive`, `confirmNext`, le tiroir de séquence et l'écran de départ dans un seul
+fichier, avec ~30 appels croisés entre ces responsabilités. Découpé en quatre fichiers
+(`live/controller.js`, `live/view.js`, `live/drawer.js`, `live/leave.js`) qui ne
+s'importent jamais statiquement entre eux (cycle inévitable sinon : controller → view →
+leave → controller, et controller ↔ drawer), reliés par un registre de fonctions
+(`live/registry.js`, même principe que `ui/nav.js` de l'étape 3), appliqué uniformément à
+chaque appel croisé plutôt qu'au cas par cas pour réduire le risque d'erreur d'analyse.
+`ctxNow`/`nowMinutes` extraits dans `js/now.js` (partagés par `ui.js` et
+`live/controller.js`, qui ne peuvent pas s'importer l'un l'autre).
+
+### Piège découvert pendant l'extraction : l'état de session devient un singleton de test
+
+Avant cette étape, `live` (l'état de session en mémoire) vivait dans `js/ui.js`, module
+réimporté avec un suffixe de requête à chaque cas de test (`import('../js/ui.js?t=...')`)
+précisément pour repartir d'un état frais. En le déplaçant dans `live/controller.js`,
+importé de façon STATIQUE par `ui.js`, ce module n'est plus jamais réinstancié : `live`
+reste fixé par la première session jamais créée dans le process de test, et
+`if (live) return;` bloque silencieusement toute session suivante dans le même fichier de
+test. Symptôme observé : `Cannot read properties of null (reading 'dispatchEvent')` dans
+`tests/live-r2.test.mjs` (le bouton de confirmation n'existe jamais si la session n'a pas
+démarré), et des assertions `undefined !== "..."` dans `tests/live-invariance.test.mjs`
+(deux sessions froide/nourrie dans le même test, la seconde ignorée).
+
+Corrigé par `resetLiveForTests()` (miroir de `resetClock()`, `js/clock.js`) : remet
+`live`/`liveTicker` à zéro, appelé dans `test.afterEach` des quatre fichiers concernés
+(`live-r1`, `live-r2`, `live-r3`, `live-invariance`) et, en plus, au milieu même des tests
+`live-invariance` qui lancent deux sessions dans un seul cas.
+
+Preuve au rouge (working-tree) : corps de `resetLiveForTests()` vidé (no-op), suite
+`live-r2` + `live-r3` + `live-invariance` relancée seule. Résultat : 9 échecs sur 12,
+exactement le même ensemble et les mêmes messages que l'échec initial découvert pendant
+l'extraction (`ADR-003` ×2, `R2` ×4, `R3` ×3). Les 3 tests encore verts sont ceux qui ne
+créent qu'une seule session par fichier et n'en dépendent donc pas. Restauré, 141/141
+revérifié.
+
+Cet enseignement s'applique tel quel à l'étape 5 (`night/*`) : `night`/`nightTicker`
+devront recevoir le même traitement dès qu'ils quittent `ui.js`.
+
 ---
 
 ## Méthode

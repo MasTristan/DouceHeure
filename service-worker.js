@@ -2,7 +2,7 @@
 // Cache versionné explicite (spec v2 §17) : app 100 % offline après
 // premier chargement, polices auto-hébergées comprises.
 
-const VERSION = 'v2.0.8'; // J1 découpe étape 4 (préalable) : js/ui/gesture.js
+const VERSION = 'v2.0.9'; // J1 découpe étape 4 : js/live/*, js/now.js
 const CACHE = `douce-heure-${VERSION}`;
 
 const ASSETS = [
@@ -30,6 +30,7 @@ const ASSETS = [
   './js/wakelock.js',
   './js/confirm-control.js',
   './js/clock.js',
+  './js/now.js',
   './js/live.js',
   './js/copy.js',
   './js/social.js',
@@ -38,6 +39,11 @@ const ASSETS = [
   './js/ui/shell.js',
   './js/ui/nav.js',
   './js/ui/gesture.js',
+  './js/live/registry.js',
+  './js/live/controller.js',
+  './js/live/view.js',
+  './js/live/drawer.js',
+  './js/live/leave.js',
   './js/studio.js',
   './assets/icon.svg',
   './assets/icon-192.png',

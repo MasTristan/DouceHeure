@@ -1,12 +1,12 @@
 // Rendu des écrans et navigation. Pas de calcul métier ici.
 // Toute règle de calcul vit dans plan.js, predict.js, travel.js, bedside.js.
 
-import { loadState, saveState, getActiveProfile, getProfile, nextDepartureProfile, ARCHETYPES, makeProfileFromArchetype, commitPreviewDefaults, startPendingSession, clearPendingSession } from './store.js';
+import { loadState, saveState, getActiveProfile, getProfile, nextDepartureProfile, ARCHETYPES, makeProfileFromArchetype, commitPreviewDefaults } from './store.js';
 import { showStudio } from './studio.js';
 import { fromMin } from './time.js';
-import { buildPlan, projectLeave, shouldRescue, rescueCandidates, TRANSPORT_BUFFER } from './plan.js';
-import { recordDurations, recordOutcome } from './predict.js';
-import { startTrip, confirmArrival, tripStatus, addDestination, getDestination } from './travel.js';
+import { buildPlan, TRANSPORT_BUFFER } from './plan.js';
+import { recordOutcome } from './predict.js';
+import { confirmArrival, tripStatus, addDestination, getDestination } from './travel.js';
 import { bedsidePhase, armBedside, disarmBedside, missedWake, SNOOZE_SILENT_MIN, WAKE_RISE_SECONDS } from './bedside.js';
 import { downloadExport, validateImport } from './backup.js';
 import { drawCard, shareCard } from './card.js';
@@ -17,13 +17,10 @@ import * as wake from './wakelock.js';
 import * as scene from './scene.js';
 import { icon, TRANSPORT_ICONS } from './icons.js';
 import { pick, UI } from './copy.js';
-import { CHANNELS, MESSAGE_TEMPLATES, sendSignal } from './social.js';
+import { CHANNELS, MESSAGE_TEMPLATES } from './social.js';
 import { createConfirmControl } from './confirm-control.js';
 import { clock } from './clock.js';
-import {
-  currentStep as pureCurrentStep, nextStepIdx as pureNextStepIdx,
-  liveStatus as pureLiveStatus, computeConfirm,
-} from './live.js';
+import { ctxNow, nowMinutes } from './now.js';
 // J1 découpe étape 1 (Nour, R1 §1.4) : helpers DOM et coquille sans état
 // métier, extraits dans leurs propres modules. ui.js les réexporte pour
 // que rien en dehors de ce fichier n'ait à changer d'import pendant que la
@@ -31,34 +28,23 @@ import {
 import { el, wordmark, topbar, toast, announce, settingRow } from './ui/dom.js';
 import { render, resetScreen, setScreen, isScreen, applySettings } from './ui/shell.js';
 import { holdButton, isHoldActive } from './ui/gesture.js';
+// J1 découpe étape 4 (Nour, R1 §1.4) : tout l'état et le rendu du Live
+// vivent désormais dans live/*. ui.js reste le point de composition qui
+// les importe (pour leur auto-enregistrement dans liveNav) et déclenche
+// la session depuis le CTA de l'Aperçu.
+import { startLive } from './live/controller.js';
+import './live/view.js';
+import './live/drawer.js';
+import './live/leave.js';
 
 export {
   el, wordmark, topbar, toast, announce, settingRow, render, resetScreen, setScreen, isScreen,
   applySettings, holdButton, isHoldActive,
 };
 
-// État de session live (mémoire, pas persisté).
-let live = null;
-let liveTicker = null;
-
 // État du mode chevet (mémoire).
 let night = null;
 let nightTicker = null;
-
-function ctxNow() {
-  const d = new Date(clock.now());
-  const day = d.getDay();
-  const type = day >= 1 && day <= 5 ? 'work' : 'other';
-  return { day, type };
-}
-
-function nowMinutes() {
-  const d = new Date(clock.now());
-  return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
-}
-
-// J1 découpe étape 4 (préalable, Nour R1 §1.4) : holdButton/isHoldActive
-// extraits dans ui/gesture.js (socle, pas spécifique au live).
 
 // ─── ONBOARDING (spec v2 §15) ───────────────────────────────────
 
@@ -513,531 +499,12 @@ export function showPreview(profileId, prefill = {}) {
   render2();
 }
 
-// ─── LIVE flagship (R1 + R2 + R3, spec v2 §7) ───────────────────
-
-// Garde contre un double appel (Nour, R1 §1.6) : deux taps rapides sur le
-// CTA de l'Aperçu, avant que le premier rendu de l'écran live ne remplace
-// ce bouton, appelaient startLive() deux fois. Le second clock.setInterval
-// écrasait la référence liveTicker du premier, qui ne pouvait alors plus
-// jamais être nettoyé par stopLiveSession() : un ticker fantôme tournait
-// jusqu'à la fermeture de la page.
-function startLive(plan, meta) {
-  if (live) return;
-  const ctx = ctxNow();
-  const state = loadState();
-  live = {
-    sequence: plan.sequence.map((s) => ({ ...s })),
-    leaveMin: plan.leaveMin,
-    arrivalMin: plan.arrivalMin,
-    margin: plan.margin,
-    startMin: plan.startMin,
-    current: 0,
-    startedAt: clock.now(),
-    measurements: [],
-    nudged: false,
-    polluted: false,
-    paused: false,
-    rescueOffered: false,
-    rescueVisible: false,
-    confirmMode: state.settings.confirmMode,
-    profileId: meta.profile.id,
-    destinationId: meta.data.destinationId,
-    transport: meta.data.transport,
-    sentContactIds: new Set(),
-    ctx,
-  };
-  // B1 : marqueur léger, purgé silencieusement après 8 h. Les mesures elles-
-  // mêmes sont écrites au fil de l'eau par confirmNext, pas ici.
-  startPendingSession(state, meta.profile.id, ctx);
-  saveState(state);
-  wake.acquire();
-  wake.bindVisibility();
-  scene.setLight(0.08, 0.5);
-  if (state.settings.ambient) {
-    audio.startAmbient();
-    audio.setAmbientOpenness(0.08);
-  }
-  speakStep();
-  renderLive();
-  liveTicker = clock.setInterval(renderLive, 5000);
-}
-
-// S1 étape 3 : la décision vit dans js/live.js (pure, testée sans DOM).
-// Ces trois fonctions ne sont plus que des câblages vers l'état courant du
-// module et l'horloge injectable, pour garder tous les appels existants
-// inchangés ci-dessous.
-function currentStep() {
-  return pureCurrentStep(live);
-}
-
-function nextStepIdx() {
-  return pureNextStepIdx(live);
-}
-
-function liveStatus() {
-  return pureLiveStatus(live, clock.now(), nowMinutes());
-}
-
-// Position temporelle dans le plan -> lumière de scène (spec v2 §2).
-function updateLiveLight(slip) {
-  const total = Math.max(1, live.sequence.length - 1);
-  const progress = live.current / total;
-  const tempo = Math.min(Math.max(-slip / 6, -1), 1);
-  const { l, warm } = scene.sessionLight(progress, tempo);
-  scene.setLight(l, warm);
-  audio.setAmbientOpenness(l);
-}
-
-function speakStep() {
-  const step = currentStep();
-  if (!live.stepMessage || live.lastMessageStep !== live.current) {
-    live.stepMessage = pick(step.key === 'leave' ? 'leave' : (step.key.startsWith('free') ? 'free' : step.key)) || pick('free');
-    live.lastMessageStep = live.current;
-  }
-  announce(`${step.label}. ${live.stepMessage}`);
-  speech.speak(`${step.label}. ${live.stepMessage}`);
-}
-
-// Seul un geste de confirmation accompli appelle cette fonction (R2).
-// La décision (mesure à écrire ou non, prochaine étape, fin de session)
-// vient de computeConfirm() (js/live.js, pure) : ici, on applique cette
-// décision (persistance, audio, rendu), on ne la recalcule pas.
-function confirmNext() {
-  if (!live || live.paused) return;
-  const result = computeConfirm(live, clock.now());
-
-  // R3 : mesure RÉELLE entre deux confirmations. Une étape polluée par un
-  // imprévu (F6) n'écrit RIEN (result.measurement est alors null).
-  if (result.measurement) {
-    live.measurements.push(result.measurement);
-    // B1 : écriture immédiate, pas d'attente d'un bilan de fin de session
-    // qui peut ne jamais arriver (l'app peut être fermée depuis l'écran
-    // Trajet, ce qu'elle invite elle-même à faire).
-    const state = loadState();
-    recordDurations(state, [result.measurement], live.ctx);
-    saveState(state);
-  }
-  live.polluted = false;
-
-  if (result.ended) {
-    return endLive();
-  }
-
-  live.current = result.nextCurrent;
-  live.startedAt = result.nextStartedAt;
-  live.nudged = false;
-  live.stepMessage = null;
-  audio.cue(result.reachedLeave ? 'arrive' : 'confirm');
-  if (result.reachedLeave) haptics.buzz('arrive');
-
-  const { slip } = liveStatus();
-  updateLiveLight(slip);
-  maybeOfferRescue(slip);
-  speakStep();
-  renderLive();
-}
-
-// F3 · Rattrapage : une proposition par session maximum (R5).
-function maybeOfferRescue(slip) {
-  if (live.rescueOffered || live.rescueVisible) return;
-  if (currentStep().key === 'leave') return;
-  const projected = projectLeave(live.sequence, live.current, nowMinutes());
-  if (!shouldRescue(projected, live.leaveMin, live.margin)) return;
-  const candidates = rescueCandidates(live.sequence, live.current);
-  if (!candidates.length) return;
-  live.rescueVisible = true;
-  live.rescueSelection = new Set(candidates.map((s) => s.key));
-}
-
-function applyRescue(keep) {
-  live.rescueVisible = false;
-  live.rescueOffered = true; // ne revient pas de la session
-  if (!keep) {
-    for (const s of live.sequence) {
-      if (live.rescueSelection.has(s.key)) s.skipped = true; // aucune mesure (R3)
-    }
-    const { slip } = liveStatus();
-    updateLiveLight(slip); // la scène regagne en dorure
-  }
-  renderLive();
-}
-
-// F6 · Imprévu : pause explicite. À la reprise, l'étape en cours est
-// marquée polluée : aucune écriture à sa confirmation (R3).
-function pauseLive() {
-  if (!live) return;
-  live.paused = true;
-  closeDrawer();
-  renderLive();
-}
-
-function resumeLive() {
-  if (!live) return;
-  live.paused = false;
-  live.polluted = true;
-  const { slip } = liveStatus();
-  updateLiveLight(slip); // recalage sans drame
-  toast(UI.wordmark, pick('pause_resumed'));
-  renderLive();
-}
-
-// ─── Le tiroir de séquence (spec v2 §7.4) ───────────────────────
-
-let drawerNode = null;
-
-function closeDrawer() {
-  if (drawerNode) { drawerNode.remove(); drawerNode = null; }
-}
-
-function openDrawer() {
-  closeDrawer();
-  if (!live) return;
-
-  function rebuild() {
-    if (!drawerNode) return;
-    const upcoming = [];
-    for (let i = live.current + 1; i < live.sequence.length; i++) {
-      const s = live.sequence[i];
-      if (s.key !== 'leave' && !s.skipped) upcoming.push({ step: s, idx: i });
-    }
-    const past = live.sequence.slice(0, live.current + 1).filter((s) => !s.skipped);
-
-    const items = [
-      ...past.map((s) => el('div', { class: 'drawer-item is-past' }, [
-        s.emoji ? el('span', { class: 'drawer-item__emoji' }, s.emoji) : icon(s.icon),
-        el('span', { class: 'drawer-item__label' }, s.label),
-      ])),
-      ...upcoming.map(({ step, idx }, pos) => el('div', { class: 'drawer-item' }, [
-        step.emoji ? el('span', { class: 'drawer-item__emoji' }, step.emoji) : icon(step.icon),
-        el('span', { class: 'drawer-item__label' }, step.label),
-        el('div', { class: 'drawer-item__actions' }, [
-          pos > 0 ? el('button', {
-            class: 'drawer-move', 'aria-label': `Monter ${step.label}`,
-            onclick: () => {
-              const otherIdx = upcoming[pos - 1].idx;
-              [live.sequence[idx], live.sequence[otherIdx]] = [live.sequence[otherIdx], live.sequence[idx]];
-              haptics.buzz('tap');
-              rebuild();
-            },
-          }, '↑') : null,
-          pos < upcoming.length - 1 ? el('button', {
-            class: 'drawer-move', 'aria-label': `Descendre ${step.label}`,
-            onclick: () => {
-              const otherIdx = upcoming[pos + 1].idx;
-              [live.sequence[idx], live.sequence[otherIdx]] = [live.sequence[otherIdx], live.sequence[idx]];
-              haptics.buzz('tap');
-              rebuild();
-            },
-          }, '↓') : null,
-          el('button', {
-            class: 'drawer-skip',
-            onclick: () => {
-              step.skipped = true; // aucune mesure écrite (R3), plan recalé
-              haptics.buzz('tap');
-              const { slip } = liveStatus();
-              updateLiveLight(slip);
-              rebuild();
-            },
-          }, UI.live_drawer_skip),
-        ]),
-      ])),
-    ];
-
-    drawerNode.querySelector('.drawer__list').replaceChildren(...items);
-  }
-
-  const sheet = el('div', { class: 'studio-modal__sheet drawer' }, [
-    el('div', { class: 'studio-modal__handle' }),
-    el('div', { class: 't-label' }, UI.live_drawer_title),
-    el('div', { class: 'spacer-sm' }),
-    el('div', { class: 'drawer__list' }),
-    el('div', { class: 'spacer-md' }),
-    el('button', { class: 'btn btn--soft', onclick: pauseLive }, UI.live_drawer_pause),
-    el('div', { class: 'spacer-sm' }),
-    el('button', { class: 'btn btn--ghost', onclick: closeDrawer }, UI.live_drawer_close),
-  ]);
-
-  drawerNode = el('div', {
-    class: 'studio-modal',
-    onclick: (e) => { if (e.target === drawerNode) closeDrawer(); },
-  }, sheet);
-  document.body.appendChild(drawerNode);
-  rebuild();
-}
-
-// ─── Rendu du Live ──────────────────────────────────────────────
-
-function renderLive() {
-  if (!live) return;
-  if (isHoldActive()) return; // ne pas détruire un appui en cours
-  const { step, suggested, nudge, slip } = liveStatus();
-
-  if (step.key === 'leave') return renderLeave(slip);
-  if (live.paused) return renderPause();
-
-  const nIdx = nextStepIdx();
-  const next = nIdx >= 0 ? live.sequence[nIdx] : null;
-
-  if (!live.stepMessage || live.lastMessageStep !== live.current) {
-    live.stepMessage = pick(step.key.startsWith('free') ? 'free' : step.key) || pick('free');
-    live.lastMessageStep = live.current;
-  }
-  const message = suggested ? pick('suggested') : live.stepMessage;
-  if (suggested && !live.suggestedShown) {
-    live.suggestedShown = live.current;
-  }
-
-  // Carte de rattrapage (F3) : non bloquante, au-dessus du geste.
-  let rescueCard = null;
-  if (live.rescueVisible) {
-    const candidates = rescueCandidates(live.sequence, live.current);
-    rescueCard = el('div', { class: 'rescue-card' }, [
-      el('div', { class: 't-title' }, pick('rescue_title')),
-      el('p', { class: 't-body t-body--sm', style: 'margin-top:4px' }, pick('rescue_body')),
-      el('div', { class: 'spacer-sm' }),
-      el('div', { class: 'rescue-card__list' }, candidates.map((s) =>
-        el('button', {
-          class: 'pill' + (live.rescueSelection.has(s.key) ? ' is-on' : ''),
-          onclick: (e) => {
-            if (live.rescueSelection.has(s.key)) live.rescueSelection.delete(s.key);
-            else live.rescueSelection.add(s.key);
-            e.currentTarget.classList.toggle('is-on');
-          },
-        }, s.label)
-      )),
-      el('div', { class: 'spacer-sm' }),
-      el('div', { style: 'display:flex; gap:10px' }, [
-        el('button', { class: 'btn btn--soft', style: 'flex:1', onclick: () => applyRescue(false) }, UI.live_rescue_lighten),
-        el('button', { class: 'btn btn--ghost', style: 'flex:1', onclick: () => applyRescue(true) }, UI.live_rescue_keep),
-      ]),
-    ]);
-  }
-
-  const isNewStep = live.lastRenderedStep !== live.current;
-  live.lastRenderedStep = live.current;
-
-  const word = el('div', { class: 'live-word' + (isNewStep ? ' is-new' : '') + (suggested ? ' state-suggested' : '') }, [
-    el('div', { class: 't-label' }, UI.live_current_label),
-    el('div', { class: 'spacer-sm' }),
-    el('h1', { class: 't-step' }, step.label),
-    el('p', { class: 't-body', style: 'margin-top: 14px' }, message),
-  ]);
-
-  const hint = live.confirmMode === 'tap' ? UI.live_tap_hint : UI.live_hold_hint;
-
-  const screen = el('main', { class: 'screen screen--live' }, [
-    wordmark(),
-    el('div', { style: 'flex:1' }),
-    word,
-    el('div', { style: 'flex:2' }),
-    next ? el('div', { class: 't-meta', style: 'text-align:center' },
-      `${UI.live_next_prefix} ${next.label}`) : null,
-    el('div', { class: 'spacer-sm' }),
-    rescueCard,
-    rescueCard ? el('div', { class: 'spacer-sm' }) : null,
-    holdButton({
-      label: UI.live_confirm(next ? next.label.toLowerCase() : ''),
-      onConfirm: confirmNext,
-      mode: live.confirmMode,
-      cls: suggested ? 'state-suggested' : '',
-    }),
-    el('div', { class: 'spacer-sm' }),
-    el('div', { class: 't-meta', style: 'text-align:center' }, hint),
-    el('div', { class: 'spacer-sm' }),
-    el('div', { class: 'live-bottom-links' }, [
-      el('button', { class: 'btn btn--ghost', onclick: openDrawer }, UI.live_drawer_open),
-      el('button', { class: 'btn btn--ghost', onclick: abortLive }, UI.live_quit),
-    ]),
-  ]);
-  render(screen, 'live');
-
-  // Nudge : une pulsation lumineuse unique + haptique + vocal, une fois.
-  if (nudge && !live.nudged) {
-    live.nudged = true;
-    const msg = pick('nudge');
-    haptics.buzz('nudge');
-    // Politesse : pas de son avant 7h si la nappe est coupée.
-    const state = loadState();
-    if (new Date().getHours() >= 7 || state.settings.ambient) audio.cue('nudge');
-    speech.speak(msg);
-    word.classList.add('state-nudge-pulse');
-    toast(step.label, msg);
-    maybeOfferRescue(slip);
-  }
-}
-
-function renderPause() {
-  const screen = el('main', { class: 'screen screen--live screen--pause' }, [
-    wordmark(),
-    el('div', { style: 'flex:1' }),
-    el('div', { class: 'live-word' }, [
-      el('h1', { class: 't-step' }, UI.live_pause_title),
-      el('p', { class: 't-body', style: 'margin-top: 14px' }, pick('pause')),
-    ]),
-    el('div', { style: 'flex:2' }),
-    el('button', { class: 'btn btn--primary', onclick: resumeLive }, UI.live_pause_cta),
-    el('div', { class: 'spacer-sm' }),
-  ]);
-  render(screen, 'live-pause');
-}
-
-// ─── Le départ (spec v2 §7.7) ───────────────────────────────────
-
-function renderLeave(slip) {
-  const state = loadState();
-  const profile = getProfile(state, live.profileId);
-  const arrivalTxt = UI.leave_arrival(fromMin(live.arrivalMin));
-
-  scene.setLight(1, slip > 2 ? 0.5 : 0.8); // pleine lumière : délivrance (R5)
-  audio.setAmbientOpenness(1);
-
-  if (!live.leaveAnnounced) {
-    live.leaveAnnounced = true;
-    live.leaveMessage = pick('leave');
-    announce(`${UI.leave_title}. ${live.leaveMessage}`);
-    speech.speak(`${UI.leave_title}. ${live.leaveMessage}`);
-  }
-
-  // Checklist du profil : cochable, pas bloquante.
-  live.checklist = live.checklist || (profile?.checklist || []).map((c) => ({ ...c, done: false }));
-  const checklist = live.checklist.length
-    ? el('div', { class: 'card' }, [
-        el('div', { class: 't-label' }, UI.leave_checklist_label),
-        el('div', { class: 'spacer-sm' }),
-        el('div', { class: 'checklist' }, live.checklist.map((item) =>
-          el('button', {
-            class: 'checklist-item' + (item.done ? ' is-done' : ''),
-            'aria-pressed': item.done ? 'true' : 'false',
-            onclick: (e) => {
-              item.done = !item.done;
-              haptics.buzz('tap');
-              e.currentTarget.classList.toggle('is-done');
-              e.currentTarget.setAttribute('aria-pressed', item.done ? 'true' : 'false');
-            },
-          }, [
-            el('span', { class: 'checklist-item__box', 'aria-hidden': 'true' }),
-            el('span', {}, item.label),
-          ])
-        )),
-      ])
-    : null;
-
-  const contacts = state.contacts || [];
-  const contactsSection = contacts.length > 0 ? buildLeaveContacts(contacts) : null;
-
-  const screen = el('main', { class: 'screen screen--live' }, [
-    wordmark(),
-    el('div', { class: 'spacer-md' }),
-    el('div', { class: 't-label' }, UI.leave_label),
-    el('div', { class: 'spacer-sm' }),
-    el('h1', { class: 't-hero' }, UI.leave_title),
-    el('p', { class: 't-body', style: 'margin-top: 10px' }, live.leaveMessage),
-    el('p', { class: 't-meta', style: 'margin-top: 8px' }, arrivalTxt),
-    el('div', { class: 'spacer-md' }),
-    checklist,
-    checklist ? el('div', { class: 'spacer-md' }) : null,
-    contactsSection,
-    contactsSection ? el('div', { class: 'spacer-md' }) : null,
-    el('div', { style: 'flex: 1' }),
-    el('button', { class: 'btn btn--primary', onclick: departNow }, UI.leave_cta),
-    el('div', { class: 'spacer-sm' }),
-    el('button', { class: 'btn btn--ghost', onclick: abortLive }, UI.live_quit),
-  ]);
-  render(screen, 'leave');
-}
-
-function buildLeaveContacts(contacts) {
-  const miniCards = contacts.map((c) => {
-    const isSent = live.sentContactIds.has(c.id);
-    const msg = MESSAGE_TEMPLATES[c.messageIdx ?? 0]();
-    const initials = c.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
-    const hue = c.name.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % 360;
-
-    return el('div', { class: 'social-mini-card' + (isSent ? ' is-sent' : '') }, [
-      el('div', {
-        class: 'social-avatar social-avatar--sm',
-        style: `background: hsl(${hue}, 35%, 25%); color: hsl(${hue}, 60%, 75%);`,
-      }, initials),
-      el('div', { class: 'social-mini-info' }, [
-        el('div', { class: 'social-mini-name' }, c.name),
-        el('em', { class: 'social-mini-msg' }, `« ${msg} »`),
-      ]),
-      isSent
-        ? el('div', { class: 'social-mini-sent' }, UI.social_sent)
-        : el('button', {
-            class: 'social-mini-send',
-            onclick: (e) => {
-              sendSignal(c);
-              live.sentContactIds.add(c.id);
-              e.currentTarget.replaceWith(el('div', { class: 'social-mini-sent' }, UI.social_sent));
-            },
-          }, UI.social_send),
-    ]);
-  });
-
-  return el('div', { class: 'social-leave-section' }, [
-    el('div', { class: 't-label', style: 'margin-bottom: 10px' }, UI.leave_contacts_label),
-    el('div', { class: 'social-leave-list' }, miniCards),
-  ]);
-}
-
-// "Je pars" : enregistre le départ du trajet (F5) puis enchaîne sur le bilan.
-function departNow() {
-  const state = loadState();
-  startTrip(state, live.destinationId, live.transport);
-  saveState(state);
-  haptics.buzz('arrive');
-  audio.cue('arrive');
-
-  const session = {
-    measurements: live.measurements,
-    ctx: live.ctx,
-    profileId: live.profileId,
-    confirmedSteps: live.sequence
-      .filter((s, i) => i < live.current && !s.skipped && s.key !== 'leave')
-      .map((s) => ({ label: s.label, confirmed: true })),
-  };
-  stopLiveSession();
-  showTrip(session);
-}
-
-function stopLiveSession() {
-  clock.clearInterval(liveTicker);
-  liveTicker = null;
-  closeDrawer();
-  wake.release();
-  audio.stopAmbient();
-  speech.cancel();
-  live = null;
-  const state = loadState();
-  clearPendingSession(state);
-  saveState(state);
-}
-
-function endLive() {
-  // Fin atteinte sans départ explicite : on passe au bilan directement.
-  const session = {
-    measurements: live.measurements,
-    ctx: live.ctx,
-    profileId: live.profileId,
-    confirmedSteps: live.sequence
-      .filter((s, i) => i < live.current && !s.skipped && s.key !== 'leave')
-      .map((s) => ({ label: s.label, confirmed: true })),
-  };
-  stopLiveSession();
-  showFeedback(session);
-}
-
-function abortLive() {
-  stopLiveSession();
-  scene.resetLight();
-  toast(UI.wordmark, UI.live_quit_confirmed);
-  showHome();
-}
-
 // ─── TRAJET (F5) ────────────────────────────────────────────────
 
-function showTrip(session) {
+// J1 découpe étape 4 : exportée pour que live/leave.js (departNow) et
+// live/controller.js (endLive) puissent y naviguer via le registre
+// ui/nav.js, sans importer ui.js directement (cycle interdit).
+export function showTrip(session) {
   const message = pick('trip_road');
   speech.speak(message);
 
@@ -1067,7 +534,7 @@ function showTrip(session) {
 
 // ─── FEEDBACK (R5) ──────────────────────────────────────────────
 
-function showFeedback(session) {
+export function showFeedback(session) {
   let selected = null;
 
   function submit() {

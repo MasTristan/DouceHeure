@@ -157,11 +157,12 @@ test('B1 : clearPendingSession efface le marqueur explicitement (fin de session 
   assert.equal(state.pendingSession, null);
 });
 
-test('B1 : ui.js appelle recordDurations dans confirmNext, pas onFeedback', () => {
+test('B1 : confirmNext appelle recordDurations, pas onFeedback', () => {
   // Verification statique légère : le point d'ecriture au fil de l'eau doit
   // exister dans le module de rendu, sans reintroduire l'ancien onFeedback
-  // qui ne s'executait qu'au bilan.
-  const src = fs.readFileSync(path.join(__dirname, '../js/ui.js'), 'utf8');
+  // qui ne s'executait qu'au bilan. confirmNext vit depuis la découpe J1
+  // étape 4 dans live/controller.js, plus dans ui.js (Nour, R1 §1.4).
+  const src = fs.readFileSync(path.join(__dirname, '../js/live/controller.js'), 'utf8');
   assert.match(src, /recordDurations\(/, 'confirmNext ne persiste plus les mesures au fil de l\'eau');
-  assert.doesNotMatch(src, /\bonFeedback\(/, 'ui.js appelle encore onFeedback : le bilan conditionne de nouveau les mesures');
+  assert.doesNotMatch(src, /\bonFeedback\(/, 'confirmNext appelle encore onFeedback : le bilan conditionne de nouveau les mesures');
 });
