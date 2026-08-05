@@ -19,6 +19,9 @@ import { defaultState } from '../js/store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uiSrc = fs.readFileSync(path.join(__dirname, '../js/ui.js'), 'utf8');
+// J1 découpe étape 4 (préalable) : holdButton vit désormais dans
+// ui/gesture.js, extrait de ui.js (socle, pas spécifique au live).
+const gestureSrc = fs.readFileSync(path.join(__dirname, '../js/ui/gesture.js'), 'utf8');
 
 function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
@@ -76,12 +79,12 @@ test('B1/B2 combinees : une session clavier "traversee en boucle" ne remplit pas
   }
 });
 
-test('ui.js : holdButton cable les quatre chemins (pointer, clavier, click, tap) via confirm-control.js', () => {
-  assert.match(uiSrc, /import\s*\{\s*createConfirmControl\s*\}\s*from\s*'\.\/confirm-control\.js'/);
-  const fnStart = uiSrc.indexOf('function holdButton');
+test('ui/gesture.js : holdButton cable les quatre chemins (pointer, clavier, click, tap) via confirm-control.js', () => {
+  assert.match(gestureSrc, /import\s*\{\s*createConfirmControl\s*\}\s*from\s*'\.\.\/confirm-control\.js'/);
+  const fnStart = gestureSrc.indexOf('function holdButton');
   assert.notEqual(fnStart, -1);
-  const fnEnd = uiSrc.indexOf('\n}\n', fnStart);
-  const body = uiSrc.slice(fnStart, fnEnd);
+  const fnEnd = gestureSrc.indexOf('\n}\n', fnStart);
+  const body = gestureSrc.slice(fnStart, fnEnd);
   assert.match(body, /control\.pointerDown\(\)/, 'chemin maintien absent');
   assert.match(body, /control\.keyDown\(/, 'chemin clavier absent');
   assert.match(body, /control\.click\(\)/, 'chemin assistif/click absent');
@@ -89,15 +92,14 @@ test('ui.js : holdButton cable les quatre chemins (pointer, clavier, click, tap)
     'le clavier semble encore confirmer directement sans passer par confirm-control');
 });
 
-test('ui.js : le keydown de holdButton ne confirme plus directement sans garde e.repeat', () => {
+test('ui/gesture.js : le keydown de holdButton ne confirme plus directement sans garde e.repeat', () => {
   // Le defaut B2 original : le bloc `btn.addEventListener('keydown', ...)`
   // appelait onConfirm() lui-meme, sans reference a repeat ni a un minuteur.
   // Desormais ce bloc doit uniquement deleguer a control.keyDown(e).
-  const holdButtonBlock = uiSrc.slice(uiSrc.indexOf('function holdButton'), uiSrc.indexOf('// ─── ONBOARDING'));
-  const keydownStart = holdButtonBlock.indexOf(`btn.addEventListener('keydown'`);
+  const keydownStart = gestureSrc.indexOf(`btn.addEventListener('keydown'`);
   assert.notEqual(keydownStart, -1, 'aucun ecouteur keydown trouve sur le bouton en mode hold');
-  const keydownEnd = holdButtonBlock.indexOf('});', keydownStart);
-  const keydownBlock = holdButtonBlock.slice(keydownStart, keydownEnd);
+  const keydownEnd = gestureSrc.indexOf('});', keydownStart);
+  const keydownBlock = gestureSrc.slice(keydownStart, keydownEnd);
   assert.doesNotMatch(keydownBlock, /(?<!control\.)onConfirm\(/, 'le keydown appelle encore onConfirm() directement');
   assert.match(keydownBlock, /control\.keyDown\(e\)/, 'le keydown ne delegue pas a control.keyDown');
   assert.match(keydownBlock, /e\.repeat|!e\.repeat/, 'aucune reference a e.repeat dans le chemin clavier');
