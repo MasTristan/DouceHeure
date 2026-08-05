@@ -8,6 +8,14 @@ Rien de visible pour l'utilisateur. Tout pour qui reprendra le code dans six moi
 **L'ordre est la spec.** Il a été retourné en R2 et il ne se renégocie pas en cours de
 route : le filet existe avant la première ligne de refactor.
 
+> **J0 est clos** (voir `S0-statut.md`) : `js/confirm-control.js` existe déjà, une partie de
+> ce que ce document appelle « extraction des lignes décisionnelles » est donc en avance
+> pour le geste de confirmation spécifiquement. `liveStatus()`, `confirmNext()` et
+> `nightTick()` restent, eux, intégralement à extraire. **Les numéros de ligne ci-dessous
+> datent d'avant J0** : `ui.js` a grossi d'environ 80 lignes pendant les correctifs B1 à B3
+> (nouveaux imports, wiring de `commitPreviewDefaults`, `recordDurations`, `pendingSession`,
+> `confirm-control.js`), à revérifier avant de commencer ce jalon.
+
 ---
 
 ## Étape 1 · L'intégration continue, dans la première heure

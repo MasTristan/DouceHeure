@@ -3,6 +3,16 @@
 **Jalons** : minimum vital en J0 (B2, B3), forme définitive en J4
 **Propriétaire** : Iris Tanaka · **Tests** : Milo Vasseur · **Chaînes** : Camille Ndiaye
 
+> **Statut : le minimum vital de J0 est livré** (voir `S0-statut.md`). Les quatre chemins
+> décrits en §3 (maintien, clavier, assistif, tap) sont implémentés dans
+> `js/confirm-control.js` et câblés dans `holdButton()` ainsi que dans le mode chevet. Ce qui
+> reste dû à ce document, pour J1/J4 : le live qui cesse de se reconstruire (§5, cause de la
+> fenêtre de 8 s plutôt qu'illimitée sur le chemin assistif), les chaînes prononcées
+> demandées à Camille (§7), le style visuel de l'état armé, et la conception définitive de la
+> feuille remplaçant les quatre dialogues natifs (§3.1, toujours en attente, DEC-03).
+> **Les numéros de ligne ci-dessous datent d'avant J0** : `ui.js` a grossi d'environ 80
+> lignes pendant les correctifs B1 à B3, ils sont à revérifier avant tout travail dessus.
+
 Le geste de confirmation est le seul mécanisme par lequel l'app avance. C'est donc le seul
 endroit où R2 se gagne ou se perd, et c'est aujourd'hui le composant le plus défaillant du
 produit : simultanément trop laxiste et trop strict.
