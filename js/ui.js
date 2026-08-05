@@ -24,8 +24,14 @@ import {
   currentStep as pureCurrentStep, nextStepIdx as pureNextStepIdx,
   liveStatus as pureLiveStatus, computeConfirm,
 } from './live.js';
+// J1 découpe étape 1 (Nour, R1 §1.4) : helpers DOM et coquille sans état
+// métier, extraits dans leurs propres modules. ui.js les réexporte pour
+// que rien en dehors de ce fichier n'ait à changer d'import pendant que la
+// découpe se poursuit (ui.js reste la façade jusqu'à l'étape 7).
+import { el, wordmark, topbar, toast, announce, settingRow } from './ui/dom.js';
+import { render, resetScreen, setScreen, isScreen, applySettings } from './ui/shell.js';
 
-const root = document.getElementById('app');
+export { el, wordmark, topbar, toast, announce, settingRow, render, resetScreen, setScreen, isScreen, applySettings };
 
 // État de session live (mémoire, pas persisté).
 let live = null;
@@ -34,28 +40,6 @@ let liveTicker = null;
 // État du mode chevet (mémoire).
 let night = null;
 let nightTicker = null;
-
-// Suivi de l'écran courant pour ne jouer l'animation d'entrée qu'une fois.
-let currentScreen = null;
-
-// ─── Helpers DOM ────────────────────────────────────────────────
-
-export function el(tag, attrs = {}, children = []) {
-  const node = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (k === 'class') node.className = v;
-    else if (k === 'html') node.innerHTML = v;
-    else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
-    else if (v !== undefined && v !== null && v !== false) node.setAttribute(k, v === true ? '' : v);
-  }
-  for (const c of [].concat(children)) {
-    if (c == null || c === false) continue;
-    node.appendChild(typeof c === 'string' || typeof c === 'number'
-      ? document.createTextNode(String(c))
-      : c);
-  }
-  return node;
-}
 
 function ctxNow() {
   const d = new Date(clock.now());
@@ -67,60 +51,6 @@ function ctxNow() {
 function nowMinutes() {
   const d = new Date(clock.now());
   return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
-}
-
-function wordmark() {
-  return el('div', { class: 'wordmark' }, [
-    el('span', { class: 'wordmark__dot' }),
-    el('span', { class: 'wordmark__name' }, UI.wordmark),
-  ]);
-}
-
-function topbar(onBack) {
-  return el('div', { class: 'studio-topbar' }, [
-    wordmark(),
-    el('button', { class: 'studio-back-btn', onclick: onBack }, '← Retour'),
-  ]);
-}
-
-function toast(title, body) {
-  const t = el('div', { class: 'toast' }, [
-    el('div', {}, [
-      el('div', { class: 'toast__title' }, title),
-      body ? el('div', { class: 'toast__body' }, body) : null,
-    ]),
-  ]);
-  document.body.appendChild(t);
-  setTimeout(() => {
-    t.style.transition = 'opacity 220ms';
-    t.style.opacity = '0';
-    setTimeout(() => t.remove(), 240);
-  }, 2600);
-}
-
-function render(node, screenKey) {
-  if (screenKey && screenKey !== currentScreen) {
-    node.classList.add('screen--enter');
-    currentScreen = screenKey;
-  }
-  root.replaceChildren(node);
-}
-
-// Annonce pour lecteurs d'écran (aria-live, spec v2 §16).
-function announce(text) {
-  let region = document.getElementById('live-region');
-  if (!region) {
-    region = el('div', { id: 'live-region', class: 'visually-hidden', 'aria-live': 'polite' });
-    document.body.appendChild(region);
-  }
-  region.textContent = text;
-}
-
-function applySettings(state) {
-  document.body.classList.toggle('readable', !!state.settings.readable);
-  audio.setEnabled(state.settings.sound !== false);
-  haptics.setEnabled(state.settings.haptics !== false);
-  speech.configure(state.settings.voice);
 }
 
 // ─── Le geste de confirmation : appui tenu (spec v2 §7.2, S2-le-geste.md) ──
@@ -539,7 +469,7 @@ export function showHome() {
 }
 
 function showHomeFresh() {
-  currentScreen = null;
+  resetScreen();
   showHome();
 }
 
@@ -1431,19 +1361,6 @@ export function showMornings() {
 
 // ─── RÉGLAGES ───────────────────────────────────────────────────
 
-function settingRow(label, value, onToggle) {
-  return el('div', { class: 'setting-row' }, [
-    el('div', { class: 't-body', style: 'color: var(--text)' }, label),
-    el('button', {
-      class: 'toggle ' + (value ? 'is-on' : 'is-off'),
-      role: 'switch',
-      'aria-checked': value ? 'true' : 'false',
-      'aria-label': label,
-      onclick: () => onToggle(!value),
-    }, [el('span', { class: 'toggle__thumb' })]),
-  ]);
-}
-
 export function showSettings() {
   function renderS() {
     const state = loadState();
@@ -1610,7 +1527,7 @@ export function showSettings() {
 
   // Les voix iOS arrivent parfois après coup.
   if ('speechSynthesis' in window) {
-    speechSynthesis.onvoiceschanged = () => { if (currentScreen === 'settings') renderS(); };
+    speechSynthesis.onvoiceschanged = () => { if (isScreen('settings')) renderS(); };
   }
   renderS();
 }
@@ -1821,7 +1738,7 @@ function renderNight() {
     el('div', { class: 'night-veil', style: `background: rgba(0,0,0,${night.veil.toFixed(2)})` }),
   ]);
   render(screen, null);
-  currentScreen = 'night';
+  setScreen('night');
 }
 
 // L'écran de réveil : appui tenu 600 ms pour se lever (R2 étendu au réveil :
@@ -1873,7 +1790,7 @@ function renderWakeProposal() {
   ]);
 
   render(zone, null);
-  currentScreen = 'waking';
+  setScreen('waking');
 }
 
 function renderGoodMorning(state) {
