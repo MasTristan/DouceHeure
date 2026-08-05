@@ -11,6 +11,11 @@ import { UI } from './copy.js';
 // J1 découpe étape 1 (Nour, R1 §1.4) : el() dupliqué à l'identique avec
 // celui de ui.js, dédupliqué dans ui/dom.js dont les deux importent.
 import { el } from './ui/dom.js';
+// J1 découpe étape 3 (Nour, R1 §1.3) : registre de navigation plutôt qu'un
+// import() dynamique de ui.js (qui cassait le cycle statique en le
+// reportant à l'exécution, au prix d'une latence au pire moment : un tap
+// en Low Power Mode à 6h45).
+import { nav } from './ui/nav.js';
 
 // --- État du Studio ---
 
@@ -699,7 +704,7 @@ function leaveStudio() {
   document.body.classList.remove('in-studio');
   const root = document.getElementById('app');
   if (root) delete root.dataset.screen;
-  import('./ui.js').then((m) => m.showHome());
+  nav.home();
 }
 
 // --- Point d'entrée ---

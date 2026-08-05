@@ -8,6 +8,13 @@ import * as speech from './speech.js';
 import * as scene from './scene.js';
 import { UI } from './copy.js';
 import { showHome, showPreview, showOnboarding, showBedsideSetup } from './ui.js';
+import { registerScreens } from './ui/nav.js';
+
+// J1 découpe étape 3 (Nour, R1 §1.3) : registre de navigation rempli une
+// fois ici, au démarrage. Casse le cycle d'imports studio.js <-> ui.js
+// (studio.js appelait jusqu'ici import('./ui.js').then(m => m.showHome())
+// pour l'éviter ; il appelle désormais nav.home() directement).
+registerScreens({ home: showHome });
 
 // Service Worker pour le cache hors-ligne. Toast discret quand une mise à
 // jour est prête, jamais bloquant.
