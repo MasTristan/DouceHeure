@@ -10,6 +10,10 @@ import vm from 'node:vm';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  parseServiceWorker, listRealCoveredFiles,
+  computeAssetsHash, readLock, COVERED_DIRS, shouldRefuseStamp,
+} from './tools/sw-assets.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const swSource = fs.readFileSync(path.join(__dirname, '../service-worker.js'), 'utf8');
@@ -89,4 +93,68 @@ test('B6 (positif) : une ressource presente au cache est servie normalement', as
   listeners.fetch(event);
   const res = await capturedResponsePromise;
   assert.equal(await res.text(), 'css');
+});
+
+// ─── S1 étape 1 : couverture et fraîcheur du manifeste ASSETS ──────────
+// Le manifeste est aujourd'hui exact (43/43), mais la découpe de J1 va
+// ajouter une vingtaine de fichiers d'un coup : ce test doit passer avant
+// la découpe, pas après, sinon le risque devient réel exactement au moment
+// où personne ne le regarde plus fichier par fichier.
+
+test('S1 : chaque fichier de js/, css/ et assets/ figure dans ASSETS', () => {
+  const { assets } = parseServiceWorker(swSource);
+  const real = listRealCoveredFiles();
+  const missing = real.filter((f) => !assets.includes(f));
+  assert.deepEqual(missing, [], `fichiers absents du manifeste : ${missing.join(', ')}`);
+});
+
+test('S1 : chaque entrée de ASSETS pointe vers un fichier qui existe', () => {
+  const { assets } = parseServiceWorker(swSource);
+  const missing = assets.filter((rel) => {
+    if (rel === '' || rel === 'index.html' || rel === 'manifest.webmanifest') {
+      return !fs.existsSync(path.join(__dirname, '..', rel || 'index.html'));
+    }
+    return !COVERED_DIRS.some((d) => rel.startsWith(d + '/')) ? false
+      : !fs.existsSync(path.join(__dirname, '..', rel));
+  });
+  assert.deepEqual(missing, [], `entrees du manifeste sans fichier : ${missing.join(', ')}`);
+});
+
+test('S1 : le verrou de hash (service-worker.assets.lock.json) est a jour', () => {
+  const { version, assets } = parseServiceWorker(swSource);
+  const currentHash = computeAssetsHash(assets);
+  const lock = readLock();
+  assert.ok(lock, 'aucun verrou trouve : lance node tests/tools/sw-stamp.mjs');
+  assert.equal(
+    currentHash, lock.hash,
+    'le contenu des fichiers du manifeste a change sans re-tamponnage : ' +
+    'lance node tests/tools/sw-stamp.mjs et commite le resultat'
+  );
+  assert.equal(
+    version, lock.version,
+    `VERSION (${version}) ne correspond pas au verrou (${lock.version}) : ` +
+    're-execute node tests/tools/sw-stamp.mjs'
+  );
+});
+
+test('S1 : sw-stamp.mjs refuse de re-tamponner un contenu change sans montee de VERSION', () => {
+  // C'est ce refus qui force la montee de VERSION a chaque changement d'un
+  // fichier cache. Teste directement la fonction de decision du script.
+  const previous = { version: 'v9.9.9', hash: 'ancien-hash' };
+  assert.equal(
+    shouldRefuseStamp('nouveau-hash', 'v9.9.9', previous), true,
+    'contenu different, VERSION inchangee : doit etre refuse'
+  );
+  assert.equal(
+    shouldRefuseStamp('nouveau-hash', 'v10.0.0', previous), false,
+    'contenu different, VERSION montee : doit etre accepte'
+  );
+  assert.equal(
+    shouldRefuseStamp('ancien-hash', 'v9.9.9', previous), false,
+    'contenu identique : rien a refuser'
+  );
+  assert.equal(
+    shouldRefuseStamp('peu-importe', 'v1.0.0', null), false,
+    'aucun verrou existant : premier tamponnage toujours accepte'
+  );
 });
