@@ -66,6 +66,17 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
+// Repli explicite quand le reseau echoue et que rien n'est en cache : jamais
+// undefined, sinon la navigation se solde par un ecran blanc. Une navigation
+// retombe sur la coquille app (index.html, deja en cache) ; toute autre
+// ressource recoit une reponse d'erreur construite.
+function offlineFallback(req) {
+  if (req.mode === 'navigate' || req.destination === 'document') {
+    return caches.match('./index.html');
+  }
+  return new Response('', { status: 503, statusText: 'Hors ligne' });
+}
+
 // Cache d'abord, réseau en secours. Aucune donnée personnelle ne transite :
 // seules les ressources statiques de l'app passent ici.
 self.addEventListener('fetch', (e) => {
@@ -80,7 +91,7 @@ self.addEventListener('fetch', (e) => {
           caches.open(CACHE).then((c) => c.put(req, copy));
         }
         return res;
-      }).catch(() => cached);
+      }).catch(() => offlineFallback(req));
     })
   );
 });
