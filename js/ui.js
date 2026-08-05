@@ -1,11 +1,11 @@
 // Rendu des écrans et navigation. Pas de calcul métier ici.
 // Toute règle de calcul vit dans plan.js, predict.js, travel.js, bedside.js.
 
-import { loadState, saveState, getActiveProfile, getProfile, nextDepartureProfile, ARCHETYPES, makeProfileFromArchetype, commitPreviewDefaults } from './store.js';
+import { loadState, saveState, getActiveProfile, getProfile, nextDepartureProfile, ARCHETYPES, makeProfileFromArchetype, commitPreviewDefaults, startPendingSession, clearPendingSession } from './store.js';
 import { showStudio } from './studio.js';
 import { fromMin } from './time.js';
 import { buildPlan, projectLeave, shouldRescue, rescueCandidates, TRANSPORT_BUFFER } from './plan.js';
-import { onFeedback } from './predict.js';
+import { recordDurations, recordOutcome } from './predict.js';
 import { startTrip, confirmArrival, tripStatus, addDestination, getDestination } from './travel.js';
 import { bedsidePhase, armBedside, disarmBedside, missedWake, SNOOZE_SILENT_MIN, WAKE_RISE_SECONDS } from './bedside.js';
 import { downloadExport, validateImport } from './backup.js';
@@ -654,6 +654,10 @@ function startLive(plan, meta) {
     sentContactIds: new Set(),
     ctx,
   };
+  // B1 : marqueur léger, purgé silencieusement après 8 h. Les mesures elles-
+  // mêmes sont écrites au fil de l'eau par confirmNext, pas ici.
+  startPendingSession(state, meta.profile.id, ctx);
+  saveState(state);
   wake.acquire();
   wake.bindVisibility();
   scene.setLight(0.08, 0.5);
@@ -721,6 +725,12 @@ function confirmNext() {
   const realDur = Math.max(1, Math.round((Date.now() - live.startedAt) / 60000));
   if (step.key !== 'leave' && !live.polluted) {
     live.measurements.push({ stepKey: step.key, v: realDur });
+    // B1 : écriture immédiate, pas d'attente d'un bilan de fin de session
+    // qui peut ne jamais arriver (l'app peut être fermée depuis l'écran
+    // Trajet, ce qu'elle invite elle-même à faire).
+    const state = loadState();
+    recordDurations(state, [{ stepKey: step.key, v: realDur }], live.ctx);
+    saveState(state);
   }
   live.polluted = false;
 
@@ -1115,6 +1125,9 @@ function stopLiveSession() {
   audio.stopAmbient();
   speech.cancel();
   live = null;
+  const state = loadState();
+  clearPendingSession(state);
+  saveState(state);
 }
 
 function endLive() {
@@ -1176,7 +1189,9 @@ function showFeedback(session) {
   function submit() {
     if (!selected) return;
     const state = loadState();
-    onFeedback(state, selected, session.measurements, { ...session.ctx, profileId: session.profileId });
+    // B1 : les durées sont déjà écrites au fil de l'eau (confirmNext). Le
+    // bilan déclaratif ne conditionne plus que le ressenti de ponctualité.
+    recordOutcome(state, selected, { ...session.ctx, profileId: session.profileId });
     saveState(state);
     toast(UI.feedback_label, pick(`feedback_${selected}`));
     scene.resetLight();

@@ -108,10 +108,35 @@ export function defaultState() {
     destinations: [],
     bedside: null,
     pendingTrip: null,
+    pendingSession: null,
     history: [],
     routine: null,
     contacts: [],
   };
+}
+
+// B1 · Marqueur léger d'une session live en cours, indépendant des mesures
+// elles-mêmes (déjà écrites au fil de l'eau par recordDurations). Sert
+// uniquement à purger silencieusement une session interrompue depuis trop
+// longtemps, sur le même principe que pendingTrip (travel.js).
+export const PENDING_SESSION_PURGE_MS = 8 * 60 * 60 * 1000; // 8 h
+
+export function startPendingSession(state, profileId, ctx, now = Date.now()) {
+  state.pendingSession = { profileId, ctx, startedTs: now };
+}
+
+export function clearPendingSession(state) {
+  state.pendingSession = null;
+}
+
+// Purge silencieuse (R5) : pas de message, pas d'écriture, juste l'oubli
+// d'un marqueur périmé.
+export function purgePendingSession(state, now = Date.now()) {
+  if (state.pendingSession && now - state.pendingSession.startedTs > PENDING_SESSION_PURGE_MS) {
+    state.pendingSession = null;
+    return true;
+  }
+  return false;
 }
 
 function iconForEmoji(emoji) {
@@ -163,6 +188,7 @@ export function migrate(state) {
     state.history = capHistory(state.history || []);
     state.bedside = state.bedside || null;
     state.pendingTrip = state.pendingTrip || null;
+    state.pendingSession = state.pendingSession || null;
     if (!state.profiles?.length) state.profiles = defaultState().profiles;
     if (!state.profiles.find((p) => p.id === state.activeProfileId)) {
       state.activeProfileId = state.profiles[0].id;

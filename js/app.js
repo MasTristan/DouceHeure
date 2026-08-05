@@ -1,6 +1,6 @@
 // Orchestration et démarrage.
 
-import { loadState, saveState, getActiveProfile } from './store.js';
+import { loadState, saveState, getActiveProfile, purgePendingSession } from './store.js';
 import { purgeExpiredTrip } from './travel.js';
 import * as audio from './audio.js';
 import * as haptics from './haptics.js';
@@ -31,9 +31,11 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// État initial : charge (migre v1 -> v2 au passage), purge un trajet périmé.
+// État initial : charge (migre v1 -> v2 au passage), purge un trajet périmé
+// et un marqueur de session interrompue depuis trop longtemps (B1).
 let state = loadState();
 purgeExpiredTrip(state);
+purgePendingSession(state);
 saveState(state);
 
 audio.setEnabled(state.settings.sound !== false);
