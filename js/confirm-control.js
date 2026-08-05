@@ -24,12 +24,19 @@
 export const HOLD_MS = 600;
 export const ASSIST_WINDOW_MS = 8000;
 
-export function createConfirmControl({ onConfirm, onArm, mode = 'hold', holdMs = HOLD_MS, now = Date.now }) {
+// setTimeoutFn/clearTimeoutFn : injectables (ADR-004, S1 étape 2) pour que le
+// minuteur de maintien soit pilotable par une horloge factice dans les
+// tests, sans délai réel. Par défaut, délèguent aux globales réelles :
+// comportement de production strictement inchangé.
+export function createConfirmControl({
+  onConfirm, onArm, mode = 'hold', holdMs = HOLD_MS, now = Date.now,
+  setTimeoutFn = setTimeout, clearTimeoutFn = clearTimeout,
+}) {
   let holdTimer = null;
   let assistArmedAt = null;
 
   function clearHold() {
-    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+    if (holdTimer) { clearTimeoutFn(holdTimer); holdTimer = null; }
   }
 
   function confirmViaHold() {
@@ -41,7 +48,7 @@ export function createConfirmControl({ onConfirm, onArm, mode = 'hold', holdMs =
   function pointerDown() {
     if (mode === 'tap') return; // le tap se confirme au click, pas au maintien
     clearHold();
-    holdTimer = setTimeout(confirmViaHold, holdMs);
+    holdTimer = setTimeoutFn(confirmViaHold, holdMs);
   }
   function pointerUp() { clearHold(); }
   function pointerCancel() { clearHold(); }
@@ -52,7 +59,7 @@ export function createConfirmControl({ onConfirm, onArm, mode = 'hold', holdMs =
     if (mode === 'tap') return;
     if (e && e.repeat) return;
     if (holdTimer) return; // deja arme par une pression precedente
-    holdTimer = setTimeout(confirmViaHold, holdMs);
+    holdTimer = setTimeoutFn(confirmViaHold, holdMs);
   }
   function keyUp() { clearHold(); }
 

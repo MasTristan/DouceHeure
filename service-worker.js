@@ -2,7 +2,7 @@
 // Cache versionné explicite (spec v2 §17) : app 100 % offline après
 // premier chargement, polices auto-hébergées comprises.
 
-const VERSION = 'v2.0.2'; // J1 étape 2 : clock.js ajouté
+const VERSION = 'v2.0.3'; // J1 étape 2 : minuteur de confirm-control.js injectable
 const CACHE = `douce-heure-${VERSION}`;
 
 const ASSETS = [

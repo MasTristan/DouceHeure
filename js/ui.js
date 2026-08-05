@@ -134,7 +134,10 @@ let holdActive = false;
 
 function holdButton({ label, onConfirm, mode, cls = '' }) {
   if (mode === 'tap') {
-    const control = createConfirmControl({ mode: 'tap', onConfirm: () => { haptics.buzz('confirm'); onConfirm(); } });
+    const control = createConfirmControl({
+      mode: 'tap', onConfirm: () => { haptics.buzz('confirm'); onConfirm(); },
+      now: clock.now, setTimeoutFn: clock.setTimeout, clearTimeoutFn: clock.clearTimeout,
+    });
     return el('button', {
       class: `hold-btn hold-btn--tap ${cls}`,
       onclick: () => control.click(),
@@ -168,6 +171,7 @@ function holdButton({ label, onConfirm, mode, cls = '' }) {
       haptics.buzz('tap');
       btn.classList.add('is-armed');
     },
+    now: clock.now, setTimeoutFn: clock.setTimeout, clearTimeoutFn: clock.clearTimeout,
   });
 
   function cancelVisual() {
@@ -1762,6 +1766,7 @@ function renderNight() {
   const quitControl = createConfirmControl({
     holdMs: 1000,
     onConfirm: () => { if (confirm(UI.bedside_quit_confirm)) stopNight(true); },
+    now: clock.now, setTimeoutFn: clock.setTimeout, clearTimeoutFn: clock.clearTimeout,
   });
 
   const screen = el('main', {
@@ -1831,7 +1836,10 @@ function renderWakeProposal() {
   // B3 : même principe qu'un holdButton ordinaire (R2 étendu au réveil),
   // avec en plus les chemins clavier et assistif hérités de la machine
   // d'état commune plutôt que d'un minuteur ad hoc borné au pointeur.
-  const control = createConfirmControl({ onConfirm: wakeConfirmed });
+  const control = createConfirmControl({
+    onConfirm: wakeConfirmed,
+    now: clock.now, setTimeoutFn: clock.setTimeout, clearTimeoutFn: clock.clearTimeout,
+  });
 
   const zone = el('main', {
     class: 'screen screen--night screen--waking' + (night.silentRepropose ? ' is-pulsing' : ''),
