@@ -50,6 +50,13 @@ export const ARCHETYPES = [
 export const MAX_PROFILES = 6;
 export const MAX_STEPS = 8;
 export const MAX_REAL = 8;
+export const MAX_HISTORY = 200;
+
+// FIFO : ne garde que les MAX_HISTORY entrées les plus récentes.
+export function capHistory(history) {
+  const arr = Array.isArray(history) ? history : [];
+  return arr.length > MAX_HISTORY ? arr.slice(-MAX_HISTORY) : arr;
+}
 
 let checklistSeq = 0;
 export function makeChecklist(labels) {
@@ -153,7 +160,7 @@ export function migrate(state) {
     state.settings.voice = { ...defaultSettings().voice, ...(state.settings.voice || {}) };
     state.destinations = state.destinations || [];
     state.contacts = state.contacts || [];
-    state.history = state.history || [];
+    state.history = capHistory(state.history || []);
     state.bedside = state.bedside || null;
     state.pendingTrip = state.pendingTrip || null;
     if (!state.profiles?.length) state.profiles = defaultState().profiles;
@@ -171,7 +178,7 @@ export function migrate(state) {
   next.settings.sound = state.sound !== false;
   next.routine = state.routine || null;
   next.contacts = state.contacts || [];
-  next.history = (state.history || []).map((h) => ({ ...h, profileId: h.profileId ?? null }));
+  next.history = capHistory((state.history || []).map((h) => ({ ...h, profileId: h.profileId ?? null })));
 
   if (Array.isArray(state.profiles) && state.profiles.length) {
     next.profiles = state.profiles.map((p) => migrateProfile(p, state.routine));
@@ -210,8 +217,15 @@ export function loadState() {
   }
 }
 
+// Échec silencieux (R5) : un quota dépassé au milieu d'une confirmation ne
+// doit jamais casser le matin en cours. La donnée en mémoire reste correcte,
+// seule la persistance rate ; le prochain écrit réussi la rattrapera.
 export function saveState(state) {
-  localStorage.setItem(KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(KEY, JSON.stringify(state));
+  } catch {
+    // volontairement silencieux
+  }
 }
 
 export function getActiveProfile(state) {

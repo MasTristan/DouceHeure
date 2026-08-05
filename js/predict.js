@@ -2,6 +2,8 @@
 // Règles : R3 (n'apprendre que du réel), R4 (marge jamais affichée).
 // Fonctions pures, aucun DOM.
 
+import { MAX_HISTORY } from './store.js';
+
 function meanAndSpread(values) {
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
   const spread = values.length < 2
@@ -65,6 +67,7 @@ export function onFeedback(state, status, realDurs, ctx) {
     type: ctx.type,
     profileId: ctx.profileId ?? state.activeProfileId ?? null,
   });
+  if (state.history.length > MAX_HISTORY) state.history.shift(); // FIFO
 
   const target = status === 'late' ? 1 : status === 'ontime' ? 0.4 : 0.15;
   state.latenessScore = state.latenessScore * 0.6 + target * 0.4;
