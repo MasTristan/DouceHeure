@@ -20,6 +20,10 @@ import { pick, UI } from './copy.js';
 import { CHANNELS, MESSAGE_TEMPLATES, sendSignal } from './social.js';
 import { createConfirmControl } from './confirm-control.js';
 import { clock } from './clock.js';
+import {
+  currentStep as pureCurrentStep, nextStepIdx as pureNextStepIdx,
+  liveStatus as pureLiveStatus, computeConfirm,
+} from './live.js';
 
 const root = document.getElementById('app');
 
@@ -714,30 +718,20 @@ function startLive(plan, meta) {
   liveTicker = clock.setInterval(renderLive, 5000);
 }
 
+// S1 étape 3 : la décision vit dans js/live.js (pure, testée sans DOM).
+// Ces trois fonctions ne sont plus que des câblages vers l'état courant du
+// module et l'horloge injectable, pour garder tous les appels existants
+// inchangés ci-dessous.
 function currentStep() {
-  return live.sequence[live.current];
+  return pureCurrentStep(live);
 }
 
 function nextStepIdx() {
-  for (let i = live.current + 1; i < live.sequence.length; i++) {
-    if (!live.sequence[i].skipped) return i;
-  }
-  return -1;
+  return pureNextStepIdx(live);
 }
 
 function liveStatus() {
-  const step = currentStep();
-  const elapsedMin = (clock.now() - live.startedAt) / 60000;
-  const suggested = elapsedMin >= step.dur && live.current < live.sequence.length - 1;
-  const nudgeThreshold = Math.max(step.dur * 1.6, step.dur + 4);
-  const nudge = step.dur > 0 && elapsedMin >= nudgeThreshold;
-
-  const projected = projectLeave(live.sequence, live.current, nowMinutes());
-  let slip = projected - live.leaveMin;
-  if (slip > 720) slip -= 1440;
-  if (slip < -720) slip += 1440;
-
-  return { step, suggested, nudge, slip, elapsedMin, projected };
+  return pureLiveStatus(live, clock.now(), nowMinutes());
 }
 
 // Position temporelle dans le plan -> lumière de scène (spec v2 §2).
@@ -761,34 +755,36 @@ function speakStep() {
 }
 
 // Seul un geste de confirmation accompli appelle cette fonction (R2).
+// La décision (mesure à écrire ou non, prochaine étape, fin de session)
+// vient de computeConfirm() (js/live.js, pure) : ici, on applique cette
+// décision (persistance, audio, rendu), on ne la recalcule pas.
 function confirmNext() {
   if (!live || live.paused) return;
-  const step = currentStep();
+  const result = computeConfirm(live, clock.now());
+
   // R3 : mesure RÉELLE entre deux confirmations. Une étape polluée par un
-  // imprévu (F6) n'écrit RIEN.
-  const realDur = Math.max(1, Math.round((clock.now() - live.startedAt) / 60000));
-  if (step.key !== 'leave' && !live.polluted) {
-    live.measurements.push({ stepKey: step.key, v: realDur });
+  // imprévu (F6) n'écrit RIEN (result.measurement est alors null).
+  if (result.measurement) {
+    live.measurements.push(result.measurement);
     // B1 : écriture immédiate, pas d'attente d'un bilan de fin de session
     // qui peut ne jamais arriver (l'app peut être fermée depuis l'écran
     // Trajet, ce qu'elle invite elle-même à faire).
     const state = loadState();
-    recordDurations(state, [{ stepKey: step.key, v: realDur }], live.ctx);
+    recordDurations(state, [result.measurement], live.ctx);
     saveState(state);
   }
   live.polluted = false;
 
-  const next = nextStepIdx();
-  if (next === -1 || step.key === 'leave') {
+  if (result.ended) {
     return endLive();
   }
 
-  live.current = next;
-  live.startedAt = clock.now();
+  live.current = result.nextCurrent;
+  live.startedAt = result.nextStartedAt;
   live.nudged = false;
   live.stepMessage = null;
-  audio.cue(currentStep().key === 'leave' ? 'arrive' : 'confirm');
-  if (currentStep().key === 'leave') haptics.buzz('arrive');
+  audio.cue(result.reachedLeave ? 'arrive' : 'confirm');
+  if (result.reachedLeave) haptics.buzz('arrive');
 
   const { slip } = liveStatus();
   updateLiveLight(slip);

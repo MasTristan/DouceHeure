@@ -79,6 +79,24 @@ exactement le test de pollution échoue (« l'étape polluée par l'imprévu a q
 mesure ecrite », 1 !== 0), les trois autres restent verts — preuve que le test cible bien
 le mécanisme attendu et rien d'autre. Restauré.
 
+### `js/live.js` — extraction (étape 3)
+
+Preuve à deux niveaux, sur le module extrait lui-même plutôt que sur `ui.js` : dans
+`computeConfirm`, la garde `!live.polluted` retirée de la condition d'écriture de la
+mesure (reproduction de la même classe de défaut que le red-proof de `live-r3` ci-dessus,
+mais localisée dans le nouveau module). Résultat, en une seule exécution :
+
+- `tests/live.test.mjs` (unitaire, pur) : le test « étape polluée (F6) ne décrit aucune
+  mesure » échoue directement sur `computeConfirm`.
+- `tests/live-r3.test.mjs` (bout en bout, DOM réel) : le test « étape polluée par un
+  imprévu » échoue via `ui.js` → `confirmNext` → `computeConfirm`.
+
+Les 21 autres tests (dont tout `live-r2`, `live-r1`, `live-invariance`) restent verts :
+la régression est capturée exactement là où elle se produit, à deux altitudes
+différentes, sans bruit ailleurs. C'est la preuve que l'extraction a bien centralisé la
+décision — casser un seul endroit dans `live.js` se voit désormais à la fois localement et
+de bout en bout. Restauré, 137/137 revérifié.
+
 ### `tests/live-invariance.test.mjs` — ADR-003
 
 Injection working-tree : libellé de l'étape concaténé avec `step.dur`
