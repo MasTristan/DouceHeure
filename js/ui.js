@@ -19,6 +19,7 @@ import { icon, TRANSPORT_ICONS } from './icons.js';
 import { pick, UI } from './copy.js';
 import { CHANNELS, MESSAGE_TEMPLATES, sendSignal } from './social.js';
 import { createConfirmControl } from './confirm-control.js';
+import { clock } from './clock.js';
 
 const root = document.getElementById('app');
 
@@ -53,14 +54,14 @@ export function el(tag, attrs = {}, children = []) {
 }
 
 function ctxNow() {
-  const d = new Date();
+  const d = new Date(clock.now());
   const day = d.getDay();
   const type = day >= 1 && day <= 5 ? 'work' : 'other';
   return { day, type };
 }
 
 function nowMinutes() {
-  const d = new Date();
+  const d = new Date(clock.now());
   return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
 }
 
@@ -425,7 +426,7 @@ export function showHome() {
   }
 
   // Réveil manqué (F1) : l'app a été tuée pendant la nuit.
-  if (state.bedside && missedWake(state.bedside)) {
+  if (state.bedside && missedWake(state.bedside, clock.now())) {
     const bsProfile = getProfile(state, state.bedside.profileId) || nextProfile;
     children.push(
       el('div', { class: 'card card--accent' }, [
@@ -679,7 +680,7 @@ function startLive(plan, meta) {
     margin: plan.margin,
     startMin: plan.startMin,
     current: 0,
-    startedAt: Date.now(),
+    startedAt: clock.now(),
     measurements: [],
     nudged: false,
     polluted: false,
@@ -706,7 +707,7 @@ function startLive(plan, meta) {
   }
   speakStep();
   renderLive();
-  liveTicker = setInterval(renderLive, 5000);
+  liveTicker = clock.setInterval(renderLive, 5000);
 }
 
 function currentStep() {
@@ -722,7 +723,7 @@ function nextStepIdx() {
 
 function liveStatus() {
   const step = currentStep();
-  const elapsedMin = (Date.now() - live.startedAt) / 60000;
+  const elapsedMin = (clock.now() - live.startedAt) / 60000;
   const suggested = elapsedMin >= step.dur && live.current < live.sequence.length - 1;
   const nudgeThreshold = Math.max(step.dur * 1.6, step.dur + 4);
   const nudge = step.dur > 0 && elapsedMin >= nudgeThreshold;
@@ -761,7 +762,7 @@ function confirmNext() {
   const step = currentStep();
   // R3 : mesure RÉELLE entre deux confirmations. Une étape polluée par un
   // imprévu (F6) n'écrit RIEN.
-  const realDur = Math.max(1, Math.round((Date.now() - live.startedAt) / 60000));
+  const realDur = Math.max(1, Math.round((clock.now() - live.startedAt) / 60000));
   if (step.key !== 'leave' && !live.polluted) {
     live.measurements.push({ stepKey: step.key, v: realDur });
     // B1 : écriture immédiate, pas d'attente d'un bilan de fin de session
@@ -779,7 +780,7 @@ function confirmNext() {
   }
 
   live.current = next;
-  live.startedAt = Date.now();
+  live.startedAt = clock.now();
   live.nudged = false;
   live.stepMessage = null;
   audio.cue(currentStep().key === 'leave' ? 'arrive' : 'confirm');
@@ -1157,7 +1158,7 @@ function departNow() {
 }
 
 function stopLiveSession() {
-  clearInterval(liveTicker);
+  clock.clearInterval(liveTicker);
   liveTicker = null;
   closeDrawer();
   wake.release();
@@ -1661,7 +1662,7 @@ export function showBedsideSetup(prefillTime) {
           speech.unlock();
           const s = loadState();
           s.bedside = { wakeTime: data.wakeTime, profileId: data.profileId, lightLeadMin: 10, sound: data.sound };
-          armBedside(s.bedside);
+          armBedside(s.bedside, clock.now());
           saveState(s);
           startNight(s.bedside);
         },
@@ -1689,11 +1690,11 @@ function startNight(bedside) {
   wake.acquire();
   wake.bindVisibility();
   renderNight();
-  nightTicker = setInterval(nightTick, 30000); // pas de rAF la nuit
+  nightTicker = clock.setInterval(nightTick, 30000); // pas de rAF la nuit
 }
 
 function stopNight(toHome) {
-  clearInterval(nightTicker);
+  clock.clearInterval(nightTicker);
   nightTicker = null;
   audio.stopWake();
   const s = loadState();
@@ -1707,7 +1708,7 @@ function stopNight(toHome) {
 
 function nightTick() {
   if (!night) return;
-  const { phase, progress } = bedsidePhase(night.wakeTs, night.bedside.lightLeadMin);
+  const { phase, progress } = bedsidePhase(night.wakeTs, night.bedside.lightLeadMin, clock.now());
 
   if (phase === 'dawn') {
     // L'aube logicielle : du quasi-noir à la pénombre chaude.
@@ -1720,7 +1721,7 @@ function nightTick() {
   }
 
   // Re-proposition silencieuse 5 min après "Pas encore" : lumière seulement (R5).
-  if (night.snoozedAt && Date.now() - night.snoozedAt >= SNOOZE_SILENT_MIN * 60000) {
+  if (night.snoozedAt && clock.now() - night.snoozedAt >= SNOOZE_SILENT_MIN * 60000) {
     night.snoozedAt = null;
     night.silentRepropose = true;
     renderWakeProposal();
@@ -1892,7 +1893,7 @@ function renderGoodMorning(state) {
         // "Pas encore" : le son se tait, la lumière reste,
         // re-proposition silencieuse après 5 min (R5).
         audio.stopWake();
-        night.snoozedAt = Date.now();
+        night.snoozedAt = clock.now();
         night.ringing = false;
         night.silentRepropose = false;
         scene.applyScene('night');
