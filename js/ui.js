@@ -18,6 +18,7 @@ import * as scene from './scene.js';
 import { icon, TRANSPORT_ICONS } from './icons.js';
 import { pick, UI } from './copy.js';
 import { CHANNELS, MESSAGE_TEMPLATES, sendSignal } from './social.js';
+import { createConfirmControl } from './confirm-control.js';
 
 const root = document.getElementById('app');
 
@@ -117,29 +118,60 @@ function applySettings(state) {
   speech.configure(state.settings.voice);
 }
 
-// ─── Le geste de confirmation : appui tenu (spec v2 §7.2) ──────
-// Un appui interrompu n'avance rien et n'écrit rien (R3).
+// ─── Le geste de confirmation : appui tenu (spec v2 §7.2, S2-le-geste.md) ──
+// Un appui interrompu n'avance rien et n'écrit rien (R3). La décision de
+// QUAND confirmer vit dans confirm-control.js (pur, testé sans DOM) : cette
+// fonction ne fait que câbler de vrais événements dessus et gérer le rendu.
+//
+// Quatre chemins vers la même garantie (R2 : intentionnel, non ambigu) :
+// maintien, clavier (B2 : keydown arme, keyup valide, repeat ignoré),
+// assistif (B3 : deux activations click en moins de 8 s, pour VoiceOver et
+// Switch Control, dont l'activation ne produit pas de maintien mesurable),
+// et tap (option de motricité, DEC-08, pas une réponse d'accessibilité).
 
 let holdActive = false;
 
 function holdButton({ label, onConfirm, mode, cls = '' }) {
   if (mode === 'tap') {
+    const control = createConfirmControl({ mode: 'tap', onConfirm: () => { haptics.buzz('confirm'); onConfirm(); } });
     return el('button', {
       class: `hold-btn hold-btn--tap ${cls}`,
-      onclick: () => { haptics.buzz('confirm'); onConfirm(); },
+      onclick: () => control.click(),
     }, [el('span', { class: 'hold-btn__label' }, label)]);
   }
 
-  let timer = null;
   const btn = el('button', { class: `hold-btn ${cls}`, 'aria-label': label }, [
     el('span', { class: 'hold-btn__fill', 'aria-hidden': 'true' }),
     el('span', { class: 'hold-btn__label' }, label),
   ]);
 
-  function cancel() {
-    if (!timer) return;
-    clearTimeout(timer);
-    timer = null;
+  // Suit si un maintien ou un clavier est en attente de résolution, pour
+  // savoir si un relâchement doit jouer l'animation d'annulation (jamais
+  // après une confirmation déjà survenue : pas de "rebond" après succès).
+  let holdPending = false;
+
+  function fireConfirm() {
+    holdPending = false;
+    holdActive = false;
+    btn.classList.remove('is-holding', 'is-armed');
+    haptics.buzz('confirm');
+    onConfirm();
+  }
+
+  const control = createConfirmControl({
+    onConfirm: fireConfirm,
+    onArm: () => {
+      // B3 : chemin assistif armé, pas encore confirmé. Retour discret ;
+      // le texte prononcé/annoncé définitif reste à écrire dans copy.js
+      // (S2-le-geste.md §7, hors périmètre de ce correctif).
+      haptics.buzz('tap');
+      btn.classList.add('is-armed');
+    },
+  });
+
+  function cancelVisual() {
+    if (!holdPending) return; // déjà confirmé ou jamais armé : rien à annuler
+    holdPending = false;
     holdActive = false;
     btn.classList.remove('is-holding');
     btn.classList.add('is-spring');
@@ -150,27 +182,34 @@ function holdButton({ label, onConfirm, mode, cls = '' }) {
     e.preventDefault();
     btn.setPointerCapture(e.pointerId);
     holdActive = true;
+    holdPending = true;
     // Remplissage radial depuis le point de contact.
     const rect = btn.getBoundingClientRect();
     btn.style.setProperty('--hold-x', `${((e.clientX - rect.left) / rect.width * 100).toFixed(1)}%`);
     btn.classList.add('is-holding');
-    timer = setTimeout(() => {
-      timer = null;
-      holdActive = false;
-      btn.classList.remove('is-holding');
-      haptics.buzz('confirm');
-      onConfirm();
-    }, 600);
+    control.pointerDown();
   });
-  btn.addEventListener('pointerup', cancel);
-  btn.addEventListener('pointercancel', cancel);
+  btn.addEventListener('pointerup', () => { cancelVisual(); control.pointerUp(); });
+  btn.addEventListener('pointercancel', () => { cancelVisual(); control.pointerCancel(); });
+
+  // B2 : keydown arme (sauf répétition automatique), keyup valide.
   btn.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      haptics.buzz('confirm');
-      onConfirm();
-    }
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    if (!e.repeat) holdPending = true;
+    control.keyDown(e);
   });
+  btn.addEventListener('keyup', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    cancelVisual();
+    control.keyUp();
+  });
+
+  // B3 : chemin assistif. Une activation atomique (click) qui n'a pas été
+  // précédée d'un maintien mesurable (VoiceOver, Switch Control) passe par
+  // le comptage à deux du contrôle plutôt que d'être ignorée ou d'avancer
+  // seule, ce qui violerait R2 dans un sens ou dans l'autre.
+  btn.addEventListener('click', () => control.click());
 
   return btn;
 }
@@ -1715,22 +1754,30 @@ function renderNight() {
   const mm = String(d.getMinutes()).padStart(2, '0');
   const shift = night.clockShift - 1;
 
-  let holdTimer = null;
+  // B3 : le geste de sortie du chevet (appui tenu 1 s) passe par la même
+  // machine d'état que le reste de l'app (confirm-control.js), ce qui lui
+  // offre gratuitement les chemins clavier et assistif. Le confirm() natif
+  // reste hors périmètre de ce correctif (remonté en J1, DEC-03).
+  const quitControl = createConfirmControl({
+    holdMs: 1000,
+    onConfirm: () => { if (confirm(UI.bedside_quit_confirm)) stopNight(true); },
+  });
 
   const screen = el('main', {
     class: 'screen screen--night',
+    role: 'button',
+    tabindex: '0',
+    'aria-label': UI.bedside_quit_confirm,
     onpointerdown: (e) => {
       // Appui tenu 1 s : quitter (avec confirmation). Tap : rien.
       night.swipeStart = e.clientY;
       night.veilStart = night.veil;
-      holdTimer = setTimeout(() => {
-        if (confirm(UI.bedside_quit_confirm)) stopNight(true);
-      }, 1000);
+      quitControl.pointerDown();
     },
     onpointermove: (e) => {
       if (night.swipeStart == null) return;
       const delta = e.clientY - night.swipeStart;
-      if (Math.abs(delta) > 12 && holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      if (Math.abs(delta) > 12) quitControl.reset();
       // Swipe vertical : luminosité via le voile.
       night.veil = Math.min(0.92, Math.max(0, night.veilStart + delta / 400));
       const veilEl = document.querySelector('.night-veil');
@@ -1738,8 +1785,18 @@ function renderNight() {
     },
     onpointerup: () => {
       night.swipeStart = null;
-      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      quitControl.pointerUp();
     },
+    onkeydown: (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      quitControl.keyDown(e);
+    },
+    onkeyup: (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      quitControl.keyUp();
+    },
+    onclick: () => quitControl.click(),
   }, [
     el('div', { style: 'flex:1' }),
     el('div', {
@@ -1762,25 +1819,6 @@ function renderWakeProposal() {
   if (!night) return;
   const state = loadState();
 
-  let holdTimer = null;
-  const zone = el('main', {
-    class: 'screen screen--night screen--waking' + (night.silentRepropose ? ' is-pulsing' : ''),
-    onpointerdown: () => {
-      holdTimer = setTimeout(() => {
-        holdTimer = null;
-        wakeConfirmed();
-      }, 600);
-    },
-    onpointerup: () => { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } },
-    onpointercancel: () => { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } },
-  }, [
-    el('div', { style: 'flex:1' }),
-    el('div', { class: 'night-clock night-clock--waking' },
-      `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`),
-    el('div', { style: 'flex:1' }),
-    el('div', { class: 'night-hint t-meta' }, UI.bedside_wake_hold),
-  ]);
-
   function wakeConfirmed() {
     haptics.buzz('confirm');
     audio.stopWake();
@@ -1788,6 +1826,37 @@ function renderWakeProposal() {
     if (night.soundFallback) audio.unlock();
     renderGoodMorning(state);
   }
+
+  // B3 : même principe qu'un holdButton ordinaire (R2 étendu au réveil),
+  // avec en plus les chemins clavier et assistif hérités de la machine
+  // d'état commune plutôt que d'un minuteur ad hoc borné au pointeur.
+  const control = createConfirmControl({ onConfirm: wakeConfirmed });
+
+  const zone = el('main', {
+    class: 'screen screen--night screen--waking' + (night.silentRepropose ? ' is-pulsing' : ''),
+    role: 'button',
+    tabindex: '0',
+    'aria-label': UI.bedside_wake_hold,
+    onpointerdown: () => control.pointerDown(),
+    onpointerup: () => control.pointerUp(),
+    onpointercancel: () => control.pointerCancel(),
+    onkeydown: (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      control.keyDown(e);
+    },
+    onkeyup: (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      control.keyUp();
+    },
+    onclick: () => control.click(),
+  }, [
+    el('div', { style: 'flex:1' }),
+    el('div', { class: 'night-clock night-clock--waking' },
+      `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`),
+    el('div', { style: 'flex:1' }),
+    el('div', { class: 'night-hint t-meta' }, UI.bedside_wake_hold),
+  ]);
 
   render(zone, null);
   currentScreen = 'waking';

@@ -2,7 +2,7 @@
 // Cache versionné explicite (spec v2 §17) : app 100 % offline après
 // premier chargement, polices auto-hébergées comprises.
 
-const VERSION = 'v2.0.0';
+const VERSION = 'v2.0.1'; // J0 : bug fixes, confirm-control.js ajouté
 const CACHE = `douce-heure-${VERSION}`;
 
 const ASSETS = [
@@ -28,6 +28,7 @@ const ASSETS = [
   './js/icons.js',
   './js/card.js',
   './js/wakelock.js',
+  './js/confirm-control.js',
   './js/copy.js',
   './js/social.js',
   './js/ui.js',
