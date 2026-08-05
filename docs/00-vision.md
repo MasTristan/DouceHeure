@@ -2,8 +2,14 @@
 
 Document d'ouverture. Écrit par la nouvelle direction du projet, après lecture intégrale
 du code, des tests et de la spec Pro Max v2. Il fixe le diagnostic, la thèse produit et le
-cap des quatre prochains jalons. Il ne remplace pas `CLAUDE.md` (les règles R1 à R5 et les
+cap des prochains jalons. Il ne remplace pas `CLAUDE.md` (les règles R1 à R5 et les
 décisions d'architecture restent verrouillées) : il dit quoi faire de ce socle.
+
+> **Révisé après la réunion d'arbitrage.** Cinq membres sur six ont contesté le
+> séquencement de ce document, depuis cinq angles indépendants, sans s'être concertés. J'ai
+> concédé. Les passages corrigés sont signalés en place ; le détail des décisions et de ce
+> qui les a emportées est dans `reunions/r2-arbitrage.md`. Le cap n'a pas bougé, son ordre
+> d'exécution oui.
 
 ---
 
@@ -15,8 +21,13 @@ donnait au bout de trois semaines.
 
 **Ce qui est solide et qu'on ne touche pas.**
 
-- Un point de vue. R1 à R5 ne sont pas des slogans : ils sont exécutables, et
-  `tests/copy.test.mjs` les fait respecter par la machine. Peu de produits ont ça.
+- Un point de vue. R1 à R5 ne sont pas des slogans, ils sont écrits pour être opposables.
+  **Corrigé après R2, et la correction compte** : `tests/copy.test.mjs` couvre 246 chaînes
+  de `copy.js`, donc R1, R4 et R5 partiellement. Il ne couvre ni la cinquantaine de
+  littéraux français qui vivent hors du fichier, ni R2, ni R3. **Sur cinq règles, une et
+  demie sont réellement exécutables par une machine.** J'avais écrit le contraire, et c'est
+  la moitié rassurante de la phrase qui était fausse. On ne finance jamais la protection de
+  ce qu'on croit déjà protégé.
 - La séparation métier / rendu tient réellement. `predict`, `plan`, `travel`, `bedside`,
   `store` sont purs et testés hors navigateur. 41 tests verts.
 - Zéro dépendance, zéro serveur, zéro requête tierce. Contrainte tenue jusqu'au bout,
@@ -32,9 +43,13 @@ donnait au bout de trois semaines.
    une app de ponctualité tranche au troisième. Aujourd'hui, jour 1 à jour 7, l'app tourne
    sur des estimations déclaratives : elle est exactement aussi bonne qu'un post-it, au
    moment précis où elle doit prouver qu'elle est autre chose.
-2. **`ui.js` fait 2 006 lignes et concentre tout le risque.** C'est le seul fichier où les
-   régressions R1 et R2 peuvent naître, et c'est le seul qui n'est couvert par aucun test.
-   Le bug de la douche, s'il revient, reviendra là.
+2. **`ui.js` fait 2 006 lignes et n'est couvert par aucun test.** *Corrigé après R2* :
+   j'avais écrit que c'était « le seul fichier où les régressions R1 et R2 peuvent naître ».
+   C'est inexact, et cette inexactitude est ce qui rendait mon ordre dangereux. Elles
+   naissent dans `liveStatus()`, `confirmNext()` et `nightTick()`, soit **environ 25 lignes
+   réellement décisionnelles sur 2 006**. Le reste est du montage de nœuds : pénible à lire,
+   quasi incapable de faire avancer une étape tout seul. Conséquence directe sur le plan :
+   on extrait et on teste les 25 lignes d'abord, on découpe les 2 006 ensuite.
 3. **Aucune intégration continue.** Les tests existent et personne ne les exécute
    automatiquement. La qualité tient à la discipline d'une équipe qui n'est plus là.
 4. **La liste `ASSETS` du service worker est maintenue à la main.** Un fichier JS ajouté
@@ -51,6 +66,15 @@ donnait au bout de trois semaines.
 Aucun de ces six points n'est une fonctionnalité manquante. C'est le diagnostic central :
 **le projet n'a pas besoin de plus de produit, il a besoin de tenir.**
 
+**Cette liste était incomplète, et c'est le principal apport de la réunion d'ouverture.**
+Huit défauts vérifiés dans le code n'y figuraient pas, dont les deux plus graves du projet :
+les mesures du matin sont perdues dès que l'utilisateur ferme l'app, ce que l'app elle-même
+lui propose de faire ; et le chemin clavier confirme instantanément, ce qui viole R2 et
+remplit la mémoire du modèle de fausses durées d'une minute. S'y ajoutent une fuite de Wake
+Lock qui empêche l'écran de s'éteindre après la première session, et l'impossibilité de
+confirmer quoi que ce soit sous VoiceOver. Ils forment le jalon J0, décrit dans
+`specs/S0-ce-qui-saigne.md`. Coût cumulé : moins de 150 lignes.
+
 ---
 
 ## 2. La thèse
@@ -64,6 +88,13 @@ Trois convictions en découlent, et elles arbitrent tout le cycle.
 juge à son effet sur les sept premiers matins. Une fonctionnalité brillante qui n'agit
 qu'au bout d'un mois passe après une friction retirée au jour 2.
 
+*Nuance imposée par R2, et elle est sévère.* Cette formule est juste pour la majorité et
+aveugle pour une minorité. Pour une personne qui utilise VoiceOver, l'abandon n'est pas au
+jour 4 : il est au matin 1, étape 1, parce qu'aucune confirmation n'est possible. Aucun
+travail sur la première semaine ni sur l'estimateur ne l'atteindra jamais, puisqu'elle
+n'atteindra jamais la deuxième étape. J'avais classé l'accessibilité comme une qualité à
+ajouter à un produit qui fonctionne ; pour ces gens, le produit ne fonctionne pas du tout.
+
 **L'honnêteté est un moteur, pas une politesse.** L'app dit déjà la vérité sur le Wake
 Lock, et cette phrase (« C'est le deal ») est la meilleure du produit. On étend le
 principe : l'app doit savoir dire ce qu'elle ne sait pas encore, sans jamais lâcher un
@@ -74,6 +105,10 @@ de serveur, pas de compte : ce qui n'existe pas dans cette app en est le produit
 chaque jalon doit **retirer** au moins une chose. Une roadmap qui n'additionne que des
 écrans est une roadmap qui a perdu le fil.
 
+*Reformulé après R2.* La règle comptait des écrans ; elle doit compter **des décisions
+prises après le réveil**. C'est plus exigeant et mieux ciblé : J2 retire le réglage de durée
+par étape, c'est-à-dire une question à laquelle l'utilisateur ne peut pas bien répondre.
+
 ---
 
 ## 3. Ce qu'on refuse pour ce cycle
@@ -83,60 +118,101 @@ Pour que le cap tienne, il faut nommer ce qui ne sera pas fait, même si c'est d
 - Aucun backend, aucun compte, aucune synchronisation. Non négociable.
 - Aucune notification en arrière-plan. La contrainte iOS est réelle, et l'honnêteté sur
   cette limite vaut mieux qu'un contournement fragile.
-- **Aucun nouvel écran principal.** Le produit a déjà onze surfaces. Le cycle se joue en
-  profondeur, pas en largeur.
+- **Aucune nouvelle destination de navigation.** Le produit a déjà onze surfaces. Le cycle
+  se joue en profondeur, pas en largeur. *Reformulé après R2* : la version initiale disait
+  « aucun nouvel écran principal », ce qui aurait interdit une feuille de confirmation
+  éphémère qui **remplace** quatre dialogues système et en fait disparaître trois autres. La
+  règle interdit toujours un douzième écran, et autorise les surfaces qui réduisent le
+  compte.
 - Aucune gamification, aucun score visible, aucun historique chiffré de retard.
 - Android reste secondaire. On teste iOS d'abord, toujours.
 
 ---
 
-## 4. Les quatre jalons
+## 4. Les jalons
+
+*Réordonnés après R2.* La version initiale comptait quatre jalons et plaçait la découpe de
+`ui.js` en tête. Un jalon est apparu devant tous les autres, J1 a été retourné, et deux
+éléments sont remontés de J4. Le détail des raisons est dans `reunions/r2-arbitrage.md`.
+
+### J0 · Ce qui saigne
+*Nouveau. Huit défauts vérifiés, aucun n'était dans mon diagnostic d'ouverture.*
+
+Les mesures perdues à la fermeture de l'app, le contournement de R2 au clavier qui
+empoisonne le modèle, l'impossibilité de confirmer sous VoiceOver, la fuite de Wake Lock,
+l'écriture d'état sans garde, le repli mort du service worker, la destination jamais
+retenue, la scène Nuit atteignable par un import. Moins de 150 lignes cumulées. Un défaut,
+un commit, un test, chaque test éprouvé au rouge.
+
+Spec : `specs/S0-ce-qui-saigne.md`.
 
 ### J1 · Socle de confiance
-*Rien de visible pour l'utilisateur. Tout pour qui reprendra le code dans six mois.*
+*Retourné. L'ordre est la spec.*
 
-Intégration continue qui exécute les tests à chaque poussée. Découpe de `ui.js` en modules
-de rendu par écran, sans changer un pixel. Tests de non-régression au niveau du DOM sur les
-deux règles qui font le produit : l'étape n'avance jamais seule (R2), aucune durée restante
-n'apparaît à l'écran (R1). Vérification automatique que la liste `ASSETS` du service worker
-couvre bien tous les fichiers livrés.
+Intégration continue d'abord, dans la première heure. Puis le filet de tests contre le
+`ui.js` actuel non modifié, qui fixe le comportement d'aujourd'hui comme référence. Puis
+l'extraction des vingt-cinq lignes réellement décisionnelles en machine à états pure. Et
+seulement ensuite la découpe par écran. Les quatre dialogues natifs disparaissent ici, pas
+en J4 : ce sont des murs bloquants et non simulables, posés sur les deux chemins les plus
+destructeurs de l'app.
 
-Critère de sortie : on peut modifier `ui.js` sans peur.
+**Clause d'arrêt.** Si le temps manque, on livre jusqu'à l'extraction et on s'arrête. Un
+`ui.js` de 2 006 lignes dont la décision d'avancement est pure et testée vaut mieux qu'un
+`ui.js` en vingt fichiers dont personne ne teste l'avancement.
+
+Critère de sortie : quatre conditions vérifiables, dont **le filet éprouvé au rouge sur une
+branche jetable**. Mon critère initial, « on peut modifier `ui.js` sans peur », était un
+sentiment : il ne se contrôle pas, donc il se déclare, donc il se déclare vrai.
+
+Spec : `specs/S1-socle-de-confiance.md`, et `specs/S2-le-geste.md` pour le composant de
+confirmation.
 
 ### J2 · La première semaine
-*Le jalon le plus important du cycle.*
+*Le jalon le plus important du cycle, et sa cause est maintenant chiffrée.*
 
-Refonte du parcours jour 1 à jour 7. L'app doit être utile sans données, honnête sur son
-ignorance, et visiblement plus juste au septième matin qu'au premier. Cela recouvre
-l'onboarding, le premier plan, la façon de parler de l'incertitude sans chiffre, et le
-moment où l'app peut enfin dire « le trajet, je connais ».
+Simulations sur le code de production : **un matin sur deux est en retard au jour 1**. Mais
+si le même utilisateur déclarait ses durées exactes, ce serait 6 %. **La totalité de
+l'échec du premier jour vient du biais de déclaration, pas du moteur.** Demander « combien
+de temps prend ta douche » à une personne en cécité temporelle, et bâtir un plan dessus,
+est le vice de conception central du produit.
 
-Critère de sortie : un testeur qui n'a jamais vu l'app arrive à l'heure au premier essai,
-et sait dire au septième matin ce que l'app a appris de lui.
+D'où la pièce maîtresse du jalon : ne plus jamais demander une durée. Demander deux heures
+d'horloge que la personne connaît réellement. Et retourner le comportement au jour 1, où
+la marge est aujourd'hui minimale au moment où l'app est la plus ignorante.
+
+Critère de sortie, révisé : *un testeur qui n'a jamais vu l'app arrive à l'heure au premier
+essai, et au septième matin son heure de lever a bougé sans qu'il ait eu à régler quoi que
+ce soit.* J'avais écrit qu'il devait « savoir dire ce que l'app a appris de lui » : ça
+fabrique de la gamification et ça contredit le §3 ci-dessus. Le progrès se constate, il ne
+se raconte pas.
+
+Spec : `specs/S3-la-premiere-semaine.md`.
 
 ### J3 · Un moteur qui mérite son nom
-*L'apprentissage est la promesse. Aujourd'hui c'est une moyenne sur huit points.*
+*Le diagnostic est plus dur que je ne l'avais écrit.*
 
-Estimateur robuste aux matins aberrants, mémoire plus longue et pondérée par la
-récence, segmentation contextuelle assumée, et surtout **calibration de la marge
-invisible** : arriver à l'heure, oui, mais sans se lever quarante minutes trop tôt. Le
-tout validé par des tests de calibration sur des historiques simulés, pas par intuition.
+Le moteur ne converge pas vers la ponctualité, il converge vers l'avance : **24 minutes
+d'avance quotidienne pour un lever 25 minutes plus tôt qu'au premier jour**. Et sa marge
+« adaptative » est en réalité une constante, parce que son terme de variance est saturé
+**99,8 %** du temps, faute de composer les écarts-types correctement.
 
-Critère de sortie : sur des historiques simulés de plusieurs profils, la marge converge
-vers le juste et le taux d'arrivée à l'heure ne se paie pas en réveils absurdes.
+Une cible de calibration est donc écrite pour la première fois : 90 % d'arrivées à l'heure
+pour 10 minutes d'avance moyenne, contre 97 % pour 24 minutes. J'échange délibérément trois
+points de ponctualité contre un quart d'heure de sommeil quotidien.
+
+Critère de sortie : la cible tenue en intégration continue, sur plusieurs profils simulés.
+
+Spec : `specs/S4-le-moteur.md`, décision : `decisions/ADR-002`.
 
 ### J4 · Le corps de l'app
-*Ce qu'on touche, ce qu'on entend, ce qui se passe la nuit.*
+*Allégé de ce qui est remonté en J0 et J1.*
 
-Accessibilité réelle : le geste d'appui tenu doit être utilisable sous VoiceOver et avec
-une motricité imparfaite, sans jamais tomber dans le tap accidentel que R2 interdit.
-Suppression des dialogues natifs. Respect de la taille de texte système. Et la nuit :
-le mode chevet doit survivre à une vraie nuit branchée, sur un vrai iPhone.
+Ce qui reste : Dynamic Type, contrastes, forme définitive de la feuille de confirmation,
+ergonomie nocturne complète, et la nuit réelle sur appareil réel.
 
-Critère de sortie : la recette de la spec, §19, passe en entier sur appareil réel, nuit
-comprise.
+Critère de sortie : la recette de la spec, §19, en entier sur appareil réel, nuit comprise,
+VoiceOver compris.
 
----
 
 ## 5. Comment on travaille
 
