@@ -678,7 +678,14 @@ export function showPreview(profileId, prefill = {}) {
 
 // ─── LIVE flagship (R1 + R2 + R3, spec v2 §7) ───────────────────
 
+// Garde contre un double appel (Nour, R1 §1.6) : deux taps rapides sur le
+// CTA de l'Aperçu, avant que le premier rendu de l'écran live ne remplace
+// ce bouton, appelaient startLive() deux fois. Le second clock.setInterval
+// écrasait la référence liveTicker du premier, qui ne pouvait alors plus
+// jamais être nettoyé par stopLiveSession() : un ticker fantôme tournait
+// jusqu'à la fermeture de la page.
 function startLive(plan, meta) {
+  if (live) return;
   const ctx = ctxNow();
   const state = loadState();
   live = {
@@ -1676,7 +1683,9 @@ export function showBedsideSetup(prefillTime) {
   renderB();
 }
 
+// Même garde que startLive() ci-dessus, même défaut d'origine (Nour, R1 §1.6).
 function startNight(bedside) {
+  if (night) return;
   night = {
     bedside,
     wakeTs: bedside.armedWakeTs,

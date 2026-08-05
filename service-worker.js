@@ -2,7 +2,7 @@
 // Cache versionné explicite (spec v2 §17) : app 100 % offline après
 // premier chargement, polices auto-hébergées comprises.
 
-const VERSION = 'v2.0.4'; // J1 étape 3 : live.js extrait de ui.js
+const VERSION = 'v2.0.5'; // J1 étape 4 (préalable) : garde double-appel startLive/startNight
 const CACHE = `douce-heure-${VERSION}`;
 
 const ASSETS = [
