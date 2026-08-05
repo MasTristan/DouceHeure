@@ -1,7 +1,7 @@
 // Rendu des écrans et navigation. Pas de calcul métier ici.
 // Toute règle de calcul vit dans plan.js, predict.js, travel.js, bedside.js.
 
-import { loadState, saveState, getActiveProfile, getProfile, nextDepartureProfile, ARCHETYPES, makeProfileFromArchetype } from './store.js';
+import { loadState, saveState, getActiveProfile, getProfile, nextDepartureProfile, ARCHETYPES, makeProfileFromArchetype, commitPreviewDefaults } from './store.js';
 import { showStudio } from './studio.js';
 import { fromMin } from './time.js';
 import { buildPlan, projectLeave, shouldRescue, rescueCandidates, TRANSPORT_BUFFER } from './plan.js';
@@ -613,6 +613,9 @@ export function showPreview(profileId, prefill = {}) {
           // Geste utilisateur : déverrouille audio et voix pour la session.
           audio.unlock();
           speech.unlock();
+          // B7 : sans ça, confirmArrival() refuse d'écrire et F5 ne boucle jamais.
+          commitPreviewDefaults(state, profile.id, { destinationId: data.destinationId, transport: data.transport });
+          saveState(state);
           startLive(plan, { profile, data, state });
         },
       }, UI.preview_cta),

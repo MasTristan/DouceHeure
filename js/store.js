@@ -236,6 +236,18 @@ export function getActiveSteps(state) {
   return getActiveProfile(state)?.steps || [];
 }
 
+// B7 · Persiste le transport et la destination choisis dans l'Aperçu, au
+// lancement de la session. Sans cela, confirmArrival() refuse d'écrire faute
+// de destination et la boucle d'apprentissage du trajet (F5) ne se ferme
+// jamais pour qui ne passe pas par le Studio.
+export function commitPreviewDefaults(state, profileId, { destinationId, transport } = {}) {
+  const profile = state.profiles?.find((p) => p.id === profileId);
+  if (!profile) return state;
+  profile.defaults.destinationId = destinationId ?? null;
+  if (transport) profile.defaults.transport = transport;
+  return state;
+}
+
 export function getProfile(state, id) {
   return state.profiles?.find((p) => p.id === id) || null;
 }
