@@ -7,18 +7,16 @@ import { fromMin } from './time.js';
 import { buildPlan, TRANSPORT_BUFFER } from './plan.js';
 import { recordOutcome } from './predict.js';
 import { confirmArrival, tripStatus, addDestination, getDestination } from './travel.js';
-import { bedsidePhase, armBedside, disarmBedside, missedWake, SNOOZE_SILENT_MIN, WAKE_RISE_SECONDS } from './bedside.js';
+import { disarmBedside, missedWake } from './bedside.js';
 import { downloadExport, validateImport } from './backup.js';
 import { drawCard, shareCard } from './card.js';
 import * as audio from './audio.js';
 import * as speech from './speech.js';
 import * as haptics from './haptics.js';
-import * as wake from './wakelock.js';
 import * as scene from './scene.js';
 import { icon, TRANSPORT_ICONS } from './icons.js';
 import { pick, UI } from './copy.js';
 import { CHANNELS, MESSAGE_TEMPLATES } from './social.js';
-import { createConfirmControl } from './confirm-control.js';
 import { clock } from './clock.js';
 import { ctxNow, nowMinutes } from './now.js';
 // J1 découpe étape 1 (Nour, R1 §1.4) : helpers DOM et coquille sans état
@@ -36,15 +34,17 @@ import { startLive } from './live/controller.js';
 import './live/view.js';
 import './live/drawer.js';
 import './live/leave.js';
+// J1 découpe étape 5 (Nour, R1 §1.4) : même principe pour le mode chevet
+// (F1). showBedsideSetup est réexportée : app.js (F8, pont Raccourcis) et
+// showHome (bouton du chevet) en ont besoin.
+import { showBedsideSetup } from './night/setup.js';
+import './night/controller.js';
+import './night/view.js';
 
 export {
   el, wordmark, topbar, toast, announce, settingRow, render, resetScreen, setScreen, isScreen,
-  applySettings, holdButton, isHoldActive,
+  applySettings, holdButton, isHoldActive, showBedsideSetup,
 };
-
-// État du mode chevet (mémoire).
-let night = null;
-let nightTicker = null;
 
 // ─── ONBOARDING (spec v2 §15) ───────────────────────────────────
 
@@ -904,310 +904,6 @@ export function showSettings() {
     speechSynthesis.onvoiceschanged = () => { if (isScreen('settings')) renderS(); };
   }
   renderS();
-}
-
-// ─── F1 · MODE CHEVET ───────────────────────────────────────────
-
-export function showBedsideSetup(prefillTime) {
-  const state = loadState();
-  const data = {
-    wakeTime: prefillTime || state.bedside?.wakeTime || '07:00',
-    profileId: state.bedside?.profileId || state.activeProfileId,
-    sound: state.bedside?.sound !== false,
-  };
-
-  function renderB() {
-    const screen = el('main', { class: 'screen stagger' }, [
-      topbar(showHome),
-      el('div', { class: 'spacer-md' }),
-      el('div', { class: 't-label' }, UI.bedside_label),
-      el('div', { class: 'spacer-sm' }),
-      el('h1', { class: 't-display' }, UI.bedside_title),
-      el('div', { class: 'spacer-md' }),
-      el('div', { class: 'card' }, [
-        el('div', { class: 't-label' }, UI.bedside_wake_label),
-        el('div', { class: 'spacer-sm' }),
-        el('input', {
-          class: 'time-input', type: 'time', value: data.wakeTime,
-          onchange: (e) => { data.wakeTime = e.target.value || '07:00'; },
-        }),
-        el('div', { class: 'spacer-md' }),
-        el('div', { class: 't-label' }, UI.bedside_profile_label),
-        el('div', { class: 'spacer-sm' }),
-        el('div', { style: 'display:flex; gap:8px; flex-wrap:wrap' }, state.profiles.map((p) =>
-          el('button', {
-            class: 'pill' + (data.profileId === p.id ? ' is-on' : ''),
-            onclick: () => { data.profileId = p.id; renderB(); },
-          }, [icon(p.icon), el('span', {}, p.name)])
-        )),
-        el('div', { class: 'spacer-md' }),
-        settingRow(UI.bedside_sound_label, data.sound, (v) => { data.sound = v; renderB(); }),
-      ]),
-      el('div', { class: 'spacer-md' }),
-      el('div', { class: 'callout callout--warning' }, [
-        el('div', { class: 'callout__text' }, UI.bedside_honest),
-      ]),
-      el('div', { class: 'spacer-sm' }),
-      el('div', { class: 'callout' }, [
-        el('div', { class: 'callout__text' }, UI.bedside_honest2),
-      ]),
-      el('div', { style: 'flex:1' }),
-      el('button', {
-        class: 'btn btn--primary',
-        onclick: () => {
-          // CE tap débloque AudioContext et speechSynthesis pour demain matin.
-          audio.unlock();
-          speech.unlock();
-          const s = loadState();
-          s.bedside = { wakeTime: data.wakeTime, profileId: data.profileId, lightLeadMin: 10, sound: data.sound };
-          armBedside(s.bedside, clock.now());
-          saveState(s);
-          startNight(s.bedside);
-        },
-      }, UI.bedside_cta),
-      el('div', { class: 'spacer-sm' }),
-      el('button', { class: 'btn btn--ghost', onclick: showHome }, UI.bedside_cancel),
-    ]);
-    render(screen, 'bedside-setup');
-  }
-
-  renderB();
-}
-
-// Même garde que startLive() ci-dessus, même défaut d'origine (Nour, R1 §1.6).
-function startNight(bedside) {
-  if (night) return;
-  night = {
-    bedside,
-    wakeTs: bedside.armedWakeTs,
-    veil: 0.55,
-    ringing: false,
-    snoozedAt: null,
-    clockShift: 0,
-  };
-  scene.applyScene('night');
-  scene.setLight(0, 0.5);
-  wake.acquire();
-  wake.bindVisibility();
-  renderNight();
-  nightTicker = clock.setInterval(nightTick, 30000); // pas de rAF la nuit
-}
-
-function stopNight(toHome) {
-  clock.clearInterval(nightTicker);
-  nightTicker = null;
-  audio.stopWake();
-  const s = loadState();
-  if (s.bedside) { disarmBedside(s.bedside); saveState(s); }
-  night = null;
-  if (toHome) {
-    wake.release();
-    showHomeFresh();
-  }
-}
-
-function nightTick() {
-  if (!night) return;
-  const { phase, progress } = bedsidePhase(night.wakeTs, night.bedside.lightLeadMin, clock.now());
-
-  if (phase === 'dawn') {
-    // L'aube logicielle : du quasi-noir à la pénombre chaude.
-    scene.setLight(progress * 0.35, 0.6);
-    night.veil = Math.max(0, 0.55 * (1 - progress));
-  }
-
-  if (phase === 'wake' && !night.ringing && !night.snoozedAt) {
-    startRinging();
-  }
-
-  // Re-proposition silencieuse 5 min après "Pas encore" : lumière seulement (R5).
-  if (night.snoozedAt && clock.now() - night.snoozedAt >= SNOOZE_SILENT_MIN * 60000) {
-    night.snoozedAt = null;
-    night.silentRepropose = true;
-    renderWakeProposal();
-    return;
-  }
-
-  // Anti burn-in : décalage de 1 px toutes les 60 s (un tick sur deux).
-  night.tickCount = (night.tickCount || 0) + 1;
-  if (night.tickCount % 2 === 0) night.clockShift = (night.clockShift + 1) % 3;
-
-  if (night.ringing) return; // l'écran de réveil gère son propre rendu
-  renderNight();
-}
-
-function startRinging() {
-  night.ringing = true;
-  const ok = night.bedside.sound ? audio.startWake(WAKE_RISE_SECONDS) : false;
-  if (night.bedside.sound && !ok) {
-    // Repli : contexte suspendu malgré tout -> lumière seule + vibration.
-    haptics.buzz('arrive');
-    night.soundFallback = true;
-  }
-  scene.setLight(0.5, 0.7);
-  renderWakeProposal();
-}
-
-function renderNight() {
-  if (!night) return;
-  const d = new Date();
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const shift = night.clockShift - 1;
-
-  // B3 : le geste de sortie du chevet (appui tenu 1 s) passe par la même
-  // machine d'état que le reste de l'app (confirm-control.js), ce qui lui
-  // offre gratuitement les chemins clavier et assistif. Le confirm() natif
-  // reste hors périmètre de ce correctif (remonté en J1, DEC-03).
-  const quitControl = createConfirmControl({
-    holdMs: 1000,
-    onConfirm: () => { if (confirm(UI.bedside_quit_confirm)) stopNight(true); },
-    now: clock.now, setTimeoutFn: clock.setTimeout, clearTimeoutFn: clock.clearTimeout,
-  });
-
-  const screen = el('main', {
-    class: 'screen screen--night',
-    role: 'button',
-    tabindex: '0',
-    'aria-label': UI.bedside_quit_confirm,
-    onpointerdown: (e) => {
-      // Appui tenu 1 s : quitter (avec confirmation). Tap : rien.
-      night.swipeStart = e.clientY;
-      night.veilStart = night.veil;
-      quitControl.pointerDown();
-    },
-    onpointermove: (e) => {
-      if (night.swipeStart == null) return;
-      const delta = e.clientY - night.swipeStart;
-      if (Math.abs(delta) > 12) quitControl.reset();
-      // Swipe vertical : luminosité via le voile.
-      night.veil = Math.min(0.92, Math.max(0, night.veilStart + delta / 400));
-      const veilEl = document.querySelector('.night-veil');
-      if (veilEl) veilEl.style.background = `rgba(0,0,0,${night.veil.toFixed(2)})`;
-    },
-    onpointerup: () => {
-      night.swipeStart = null;
-      quitControl.pointerUp();
-    },
-    onkeydown: (e) => {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
-      e.preventDefault();
-      quitControl.keyDown(e);
-    },
-    onkeyup: (e) => {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
-      quitControl.keyUp();
-    },
-    onclick: () => quitControl.click(),
-  }, [
-    el('div', { style: 'flex:1' }),
-    el('div', {
-      class: 'night-clock',
-      style: `transform: translate(${shift}px, ${shift}px)`,
-    }, `${hh}:${mm}`),
-    el('div', { class: 'spacer-sm' }),
-    el('div', { class: 'night-wake-time t-meta' }, `${UI.bedside_wake_label} ${night.bedside.wakeTime}`),
-    el('div', { style: 'flex:1' }),
-    el('div', { class: 'night-hint t-meta' }, UI.bedside_night_hint),
-    el('div', { class: 'night-veil', style: `background: rgba(0,0,0,${night.veil.toFixed(2)})` }),
-  ]);
-  render(screen, null);
-  setScreen('night');
-}
-
-// L'écran de réveil : appui tenu 600 ms pour se lever (R2 étendu au réveil :
-// le réveil n'avance JAMAIS seul vers le live).
-function renderWakeProposal() {
-  if (!night) return;
-  const state = loadState();
-
-  function wakeConfirmed() {
-    haptics.buzz('confirm');
-    audio.stopWake();
-    // Au premier geste, si le contexte était suspendu, le son est restauré.
-    if (night.soundFallback) audio.unlock();
-    renderGoodMorning(state);
-  }
-
-  // B3 : même principe qu'un holdButton ordinaire (R2 étendu au réveil),
-  // avec en plus les chemins clavier et assistif hérités de la machine
-  // d'état commune plutôt que d'un minuteur ad hoc borné au pointeur.
-  const control = createConfirmControl({
-    onConfirm: wakeConfirmed,
-    now: clock.now, setTimeoutFn: clock.setTimeout, clearTimeoutFn: clock.clearTimeout,
-  });
-
-  const zone = el('main', {
-    class: 'screen screen--night screen--waking' + (night.silentRepropose ? ' is-pulsing' : ''),
-    role: 'button',
-    tabindex: '0',
-    'aria-label': UI.bedside_wake_hold,
-    onpointerdown: () => control.pointerDown(),
-    onpointerup: () => control.pointerUp(),
-    onpointercancel: () => control.pointerCancel(),
-    onkeydown: (e) => {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
-      e.preventDefault();
-      control.keyDown(e);
-    },
-    onkeyup: (e) => {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
-      control.keyUp();
-    },
-    onclick: () => control.click(),
-  }, [
-    el('div', { style: 'flex:1' }),
-    el('div', { class: 'night-clock night-clock--waking' },
-      `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`),
-    el('div', { style: 'flex:1' }),
-    el('div', { class: 'night-hint t-meta' }, UI.bedside_wake_hold),
-  ]);
-
-  render(zone, null);
-  setScreen('waking');
-}
-
-function renderGoodMorning(state) {
-  scene.applyScene('dawn');
-  scene.setLight(0.2, 0.6);
-  const bsProfile = getProfile(state, night.bedside.profileId) || getActiveProfile(state);
-  const greeting = `${pick('goodmorning')}${state.name ? ' ' + state.name + '.' : ''}`;
-  speech.speak(greeting);
-
-  const screen = el('main', { class: 'screen stagger' }, [
-    wordmark(),
-    el('div', { style: 'flex:1' }),
-    el('h1', { class: 't-hero' }, greeting),
-    el('div', { style: 'flex:1' }),
-    el('button', {
-      class: 'btn btn--primary',
-      onclick: () => {
-        const profileId = bsProfile?.id;
-        stopNight(false);
-        const s = loadState();
-        s.activeProfileId = profileId || s.activeProfileId;
-        saveState(s);
-        showPreview(profileId);
-      },
-    }, UI.bedside_morning_cta),
-    el('div', { class: 'spacer-sm' }),
-    el('button', {
-      class: 'btn btn--ghost',
-      onclick: () => {
-        // "Pas encore" : le son se tait, la lumière reste,
-        // re-proposition silencieuse après 5 min (R5).
-        audio.stopWake();
-        night.snoozedAt = clock.now();
-        night.ringing = false;
-        night.silentRepropose = false;
-        scene.applyScene('night');
-        scene.setLight(0.35, 0.6);
-        toast(UI.wordmark, pick('wake_again'));
-        renderNight();
-      },
-    }, UI.bedside_not_yet),
-  ]);
-  render(screen, 'goodmorning');
 }
 
 // ─── MES PROCHES (contacts réels, rattachés au départ) ──────────

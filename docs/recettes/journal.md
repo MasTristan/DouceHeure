@@ -146,6 +146,28 @@ revérifié.
 Cet enseignement s'applique tel quel à l'étape 5 (`night/*`) : `night`/`nightTicker`
 devront recevoir le même traitement dès qu'ils quittent `ui.js`.
 
+## J1 étape 5 · Découpe de `night/*`
+
+Même geste que l'étape 4, sur le mode chevet (F1, spec v2 §6) : `controller.js` (état,
+`startNight`/`stopNight`/`nightTick`/`startRinging`) et `view.js` (`renderNight`,
+`renderWakeProposal`, `renderGoodMorning`) s'appellent en croix, reliés par
+`night/registry.js` (même principe que `live/registry.js`). `setup.js`
+(`showBedsideSetup`) n'a pas besoin du registre : il importe `startNight` directement,
+`controller.js` ne dépendant jamais de lui en retour. `ui.js` passe de 1398 à 1094 lignes.
+
+Piège anticipé dès l'étape 4 (paragraphe ci-dessus) : `night`/`nightTicker` déplacés dans
+`night/controller.js`, importé statiquement par `ui.js`, deviennent eux aussi un
+singleton de test. `resetNightForTests()` ajouté immédiatement (même geste que
+`resetLiveForTests()`), appelé dans `test.afterEach` des fichiers qui arment le chevet
+(`session-guard`, `live-r1`, `live-r2`, `night-tick`).
+
+Preuve au rouge, cette fois construite plutôt que découverte après coup : un second test
+ajouté à `tests/night-tick.test.mjs` qui arme un chevet dans un cas de test distinct, sans
+jamais arrêter explicitement celui du premier cas. Corps de `resetNightForTests()` vidé
+(no-op) : le second test échoue avec `"l'écran de nuit n'apparaît pas au second armement
+de chevet"`, `startNight()` restant bloqué par `if (night) return;` sur l'état laissé par
+le premier cas. Restauré, 143/143 revérifié.
+
 ---
 
 ## Méthode

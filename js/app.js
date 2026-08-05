@@ -17,7 +17,9 @@ import { registerScreens } from './ui/nav.js';
 // J1 découpe étape 4 : trip/feedback ajoutés pour que live/leave.js
 // (departNow) et live/controller.js (endLive) puissent y naviguer sans
 // importer ui.js (cycle interdit tant que ces écrans y restent).
-registerScreens({ home: showHome, trip: showTrip, feedback: showFeedback });
+// J1 découpe étape 5 : preview ajouté pour que night/view.js
+// (renderGoodMorning) puisse y naviguer de la même façon.
+registerScreens({ home: showHome, trip: showTrip, feedback: showFeedback, preview: showPreview });
 
 // Service Worker pour le cache hors-ligne. Toast discret quand une mise à
 // jour est prête, jamais bloquant.

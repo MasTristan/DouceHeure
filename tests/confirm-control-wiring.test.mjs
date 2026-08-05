@@ -22,6 +22,9 @@ const uiSrc = fs.readFileSync(path.join(__dirname, '../js/ui.js'), 'utf8');
 // J1 découpe étape 4 (préalable) : holdButton vit désormais dans
 // ui/gesture.js, extrait de ui.js (socle, pas spécifique au live).
 const gestureSrc = fs.readFileSync(path.join(__dirname, '../js/ui/gesture.js'), 'utf8');
+// J1 découpe étape 5 : renderNight/renderWakeProposal vivent désormais
+// dans night/view.js, extrait de ui.js (Nour, R1 §1.4).
+const nightViewSrc = fs.readFileSync(path.join(__dirname, '../js/night/view.js'), 'utf8');
 
 function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
@@ -105,27 +108,27 @@ test('ui/gesture.js : le keydown de holdButton ne confirme plus directement sans
   assert.match(keydownBlock, /e\.repeat|!e\.repeat/, 'aucune reference a e.repeat dans le chemin clavier');
 });
 
-test('ui.js : le mode chevet (renderNight, renderWakeProposal) expose un element focusable et nomme', () => {
+test('night/view.js : le mode chevet (renderNight, renderWakeProposal) expose un element focusable et nomme', () => {
   for (const fnName of ['renderNight', 'renderWakeProposal']) {
-    const start = uiSrc.indexOf(`function ${fnName}`);
+    const start = nightViewSrc.indexOf(`function ${fnName}`);
     assert.notEqual(start, -1, `${fnName} introuvable`);
-    const end = uiSrc.indexOf('\n}\n', start);
-    const body = uiSrc.slice(start, end);
+    const end = nightViewSrc.indexOf('\n}\n', start);
+    const body = nightViewSrc.slice(start, end);
     assert.match(body, /tabindex:\s*'0'/, `${fnName} n'expose pas d'element focusable`);
     assert.match(body, /'aria-label':/, `${fnName} n'expose pas de nom accessible`);
     assert.match(body, /role:\s*'button'/, `${fnName} n'expose pas de role actionnable`);
   }
 });
 
-test('ui.js : aucun prompt() ni confirm() n\'a ete introduit par ce correctif (ceux qui restent sont hors perimetre B2/B3, voir S1)', () => {
+test('night/view.js : aucun prompt() ni confirm() n\'a ete introduit par ce correctif (ceux qui restent sont hors perimetre B2/B3, voir S1)', () => {
   // Ce test ne verifie pas leur absence totale (remonte en J1/S1, DEC-03) :
   // il verifie seulement qu'aucune NOUVELLE confirmation bloquante n'a ete
   // ajoutee dans les deux fonctions touchees par ce correctif. Les
   // commentaires de code sont exclus du comptage (ils peuvent legitimement
   // mentionner "confirm()" en prose sans que ce soit un appel).
-  const start = uiSrc.indexOf('function renderNight');
-  const end = uiSrc.indexOf('function renderWakeProposal');
-  const nightBody = uiSrc.slice(start, end)
+  const start = nightViewSrc.indexOf('function renderNight');
+  const end = nightViewSrc.indexOf('function renderWakeProposal');
+  const nightBody = nightViewSrc.slice(start, end)
     .split('\n')
     .map((line) => line.replace(/\/\/.*$/, ''))
     .join('\n');

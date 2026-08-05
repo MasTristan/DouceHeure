@@ -11,12 +11,14 @@ import { installTinyDom, allText, byClass } from './tiny-dom.mjs';
 import { installFakeClock, resetClock } from '../js/clock.js';
 import { defaultState } from '../js/store.js';
 import { resetLiveForTests } from '../js/live/controller.js';
+import { resetNightForTests } from '../js/night/controller.js';
 
-// live/controller.js est importé de façon statique par ui.js (jamais
-// réinstancié malgré le suffixe de requête ci-dessous, cf. son commentaire
-// sur resetLiveForTests) : sans ce reset, une session laissée ouverte par
-// un cas de test bloquerait silencieusement le suivant.
-test.afterEach(() => { resetClock(); resetLiveForTests(); });
+// live/controller.js et night/controller.js sont importés de façon
+// statique par ui.js (jamais réinstanciés malgré le suffixe de requête
+// ci-dessous, cf. leur commentaire sur resetLiveForTests/resetNightForTests) :
+// sans ce reset, une session laissée ouverte par un cas de test bloquerait
+// silencieusement le suivant.
+test.afterEach(() => { resetClock(); resetLiveForTests(); resetNightForTests(); });
 
 // Même liste que tests/copy.test.mjs (R1), appliquée ici au texte rendu.
 const FORBIDDEN = [
