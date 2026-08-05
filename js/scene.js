@@ -12,9 +12,15 @@ export function sceneForHour(h) {
   return 'evening';
 }
 
+// La scène Nuit n'est jamais choisie ici, quels que soient les réglages :
+// c'est un invariant de source, pas seulement une absence d'option dans
+// l'interface. Un settings.scene = 'night' corrompu ou importé retombe sur
+// l'horloge plutôt que de verrouiller l'app en quasi-noir hors chevet.
+const CLOCK_SCENES = ['dawn', 'day', 'evening'];
+
 export function resolveScene(settings, hour) {
   const pref = settings?.scene || 'auto';
-  if (pref !== 'auto' && SCENES.includes(pref)) return pref;
+  if (pref !== 'auto' && CLOCK_SCENES.includes(pref)) return pref;
   return sceneForHour(hour);
 }
 
