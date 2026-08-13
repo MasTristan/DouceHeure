@@ -2,7 +2,7 @@
 // Cache versionné explicite (spec v2 §17) : app 100 % offline après
 // premier chargement, polices auto-hébergées comprises.
 
-const VERSION = 'v2.3.0'; // J1 découpe étape 7 : suppression de la façade js/ui.js
+const VERSION = 'v2.3.1'; // correctif : direction de flex manquante sur .studio-step
 const CACHE = `douce-heure-${VERSION}`;
 
 const ASSETS = [

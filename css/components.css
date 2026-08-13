@@ -885,7 +885,8 @@ body.in-studio {
 /* Carte d'étape du Studio */
 .studio-step {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 10px;
   background: var(--surface);
   border: 1.5px solid var(--border);
