@@ -1,10 +1,9 @@
 // S1 étape 2 · Faux DOM minimal, zéro dépendance (ADR-001), qui permet
-// d'importer et de piloter js/ui.js sous node. ui.js touche le DOM au
-// chargement du module (`const root = document.getElementById('app')`,
-// ui.js:22) : installTinyDom() installe les globales AVANT l'import
-// dynamique, ce qui contourne cet obstacle sans toucher au fichier de
-// production. Suffisant pour les écrans exercés par le filet (live, chevet),
-// pas une implémentation générale du DOM.
+// d'importer et de piloter les écrans réels (js/screens/*.js, js/night/*.js,
+// js/live/*.js) sous node. installTinyDom() installe les globales AVANT
+// tout import de ces fichiers, qui lisent `document`/`localStorage` dès
+// leur premier appel. Suffisant pour les écrans exercés par le filet (live,
+// chevet), pas une implémentation générale du DOM.
 
 let idSeq = 0;
 
@@ -205,11 +204,11 @@ function makeFakeLocalStorage() {
   };
 }
 
-// Installe un DOM et des globales fraîches. À appeler avant chaque import
-// dynamique de ui.js (avec un suffixe de requête unique) pour repartir d'un
-// état propre : ui.js garde son état de session (`live`, `night`,
-// `currentScreen`) dans des variables de module, remises à zéro uniquement
-// par une nouvelle instance du module.
+// Installe un DOM et des globales fraîches. À appeler au début de chaque
+// test. Les écrans eux-mêmes (js/screens/*.js) n'ont pas d'état propre :
+// seuls js/live/controller.js et js/night/controller.js en gardent un
+// (`live`, `night`), remis à zéro explicitement par
+// resetLiveForTests()/resetNightForTests() plutôt que par ce faux DOM.
 export function installTinyDom() {
   const documentElement = new TinyElement('html');
   const body = new TinyElement('body');

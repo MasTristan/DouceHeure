@@ -3,7 +3,7 @@
 //   step.real apres un scenario clavier agressif", sans DOM (le mecanisme de
 //   garde est deja prouve dans confirm-control.test.mjs ; ce test verifie
 //   qu'il protege bien recordDurations comme confirmNext le ferait).
-// - des verifications structurelles legeres sur js/ui.js : le cablage reel
+// - des verifications structurelles legeres sur le rendu du geste : le cablage reel
 //   sur de vrais evenements DOM (pointerdown/keydown/click du navigateur)
 //   n'est pas testable sans un DOM complet. Ce niveau de test est reserve
 //   au harnais tiny-dom de J1 (S1-socle-de-confiance.md, etape 2) : ce
@@ -18,7 +18,6 @@ import { recordDurations } from '../js/predict.js';
 import { defaultState } from '../js/store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uiSrc = fs.readFileSync(path.join(__dirname, '../js/ui.js'), 'utf8');
 // J1 découpe étape 4 (préalable) : holdButton vit désormais dans
 // ui/gesture.js, extrait de ui.js (socle, pas spécifique au live).
 const gestureSrc = fs.readFileSync(path.join(__dirname, '../js/ui/gesture.js'), 'utf8');

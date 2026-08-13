@@ -215,6 +215,57 @@ Preuve au rouge, sur le risque réel de cette étape (une faute de frappe dans u
 échoue avec `"nav.settingz is not a function"`, exactement le test concerné (réglages), les
 trois autres restant verts. Restauré, 154/154 revérifié.
 
+## J1 étape 7 · Suppression de la façade `js/ui.js`
+
+Dernière étape de la découpe (clause d'arrêt de `S1-socle-de-confiance.md` dépassée depuis
+l'étape 4 : le filet a permis d'aller jusqu'au bout). `js/ui.js` ne contenait plus, après
+l'étape 6, que des réexports (39 lignes) : supprimé. `app.js` devient le seul point de
+composition, avec deux responsabilités qu'`ui.js` portait jusqu'ici sans que rien ne le
+documente comme tel :
+
+1. Importer `live/view.js`, `live/drawer.js`, `live/leave.js` et `night/view.js` pour leur
+   auto-enregistrement dans `liveNav`/`nightNav` (S1 §4). Ces quatre fichiers ne sont
+   importés nulle part ailleurs en production : sans cet import, `live/controller.js` et
+   `night/controller.js` plantent au premier appel à
+   `liveNav.renderLive()`/`nightNav.renderNight()` (`live/controller.js`, `night/view.js`
+   important déjà `controller.js` transitivement).
+2. Importer chaque écran plat et remplir `ui/nav.js` (`registerScreens`), déjà en place
+   depuis l'étape 6.
+
+**Conséquence sur les tests.** Neuf fichiers de tests dynamiques importaient jusqu'ici
+`../js/ui.js?t=...` (suffixe de requête pour repartir d'un module frais). Deux choses ont
+changé :
+
+- Le suffixe de requête n'est plus nécessaire : `screens/*.js` et `night/setup.js` n'ont
+  aucun état de module (contrairement à `live/controller.js` et `night/controller.js`, qui
+  gardent le leur et restent réinitialisés via `resetLiveForTests()`/`resetNightForTests()`,
+  inchangés). Les neuf fichiers importent désormais directement la fonction dont ils ont
+  besoin (`import { showPreview } from '../js/screens/preview.js'`), en import statique
+  ordinaire.
+- Comme `ui.js` faisait l'import d'enregistrement (point 1 ci-dessus) et que les tests ne
+  passent plus par lui, chaque fichier qui atteint un écran live ou chevet doit désormais
+  importer lui-même `live/view.js`/`drawer.js`/`leave.js`/`night/view.js`, exactement comme
+  `app.js` le fait en production. Omis dans un premier passage, l'erreur immédiate et sans
+  ambiguïté (`liveNav.renderLive is not a function`) a servi de garde-fou : chaque fichier
+  concerné a été corrigé un par un jusqu'à retrouver 154/154.
+
+**Le trou qui restait : personne ne testait `app.js` lui-même.** Tous les fichiers de test
+réimportent indépendamment les modules d'enregistrement ; aucun ne vérifiait que `app.js`
+les importe tous, lui, réellement. Un oubli dans `app.js` (par exemple `live/view.js` non
+importé) n'aurait été visible qu'en production, au premier chargement réel de la page.
+Nouveau fichier, `tests/app-boot.test.mjs`, qui importe `app.js` directement (comme le
+ferait `<script type="module" src="js/app.js">` de `index.html`) et déroule un scénario
+complet : accueil affiché au démarrage, clic sur le prochain départ, aperçu, lancement de
+la session, confirmation de la première étape.
+
+Preuve au rouge : `import './live/view.js';` retiré de `app.js`. `tests/app-boot.test.mjs`
+échoue avec `"liveNav.renderLive is not a function"`, exactement l'erreur qu'un oubli réel
+aurait produite en production. Restauré, 155/155 revérifié.
+
+`js/ui.js` disparu du manifeste et de `ASSETS` du service worker (v2.3.0). `CLAUDE.md` §4
+et `README.md` mis à jour pour refléter l'arborescence finale (`ui/`, `live/`, `night/`,
+`screens/`, `js/learned.js`, `js/now.js`).
+
 ---
 
 ## Méthode
@@ -239,4 +290,4 @@ la suite complète a été revérifiée verte (118/118) après chaque restaurati
 2. `node tests/tools/sw-stamp.mjs` — doit afficher « rien à mettre à jour » (si un
    changement d'ASSETS a eu lieu sans montée de `VERSION`, l'outil refuse et le dit).
 3. Relecture du diff : aucun `Date.now()`/`setInterval`/`setTimeout` direct réintroduit
-   dans les zones couvertes par `js/clock.js` (`ui.js`, `confirm-control.js`).
+   dans les zones couvertes par `js/clock.js` (`live/*`, `night/*`, `confirm-control.js`).

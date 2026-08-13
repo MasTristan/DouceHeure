@@ -1,9 +1,9 @@
 // S1 étape 2 · Harnais anti bug de la douche. C'est le test le plus
 // important du projet (CLAUDE.md §6) et, avant ce fichier, rien ne le
 // vérifiait automatiquement : R2 n'était couverte par aucune machine
-// (constat de Milo, R1). Pilote js/ui.js réel, non modifié dans sa
-// décision d'avancement, via tests/tiny-dom.mjs et une horloge factice
-// (js/clock.js, ADR-004).
+// (constat de Milo, R1). Pilote les écrans réels (js/screens/preview.js,
+// js/night/setup.js), non modifiés dans leur décision d'avancement, via
+// tests/tiny-dom.mjs et une horloge factice (js/clock.js, ADR-004).
 //
 // L'invariant à protéger, mot pour mot (CLAUDE.md §6) : « l'horloge sert
 // UNIQUEMENT à savoir si on est dans les temps. Elle ne change JAMAIS
@@ -15,17 +15,23 @@ import { installFakeClock, resetClock } from '../js/clock.js';
 import { defaultState } from '../js/store.js';
 import { resetLiveForTests } from '../js/live/controller.js';
 import { resetNightForTests } from '../js/night/controller.js';
+import { showPreview } from '../js/screens/preview.js';
+import { showBedsideSetup } from '../js/night/setup.js';
+// Auto-enregistrement dans liveNav/nightNav (S1 §4) : en production, seul
+// app.js importe ces modules pour cet effet de bord. Sans cet import ici,
+// startLive()/nightTick() plantent au premier appel à
+// liveNav.renderLive()/nightNav.renderNight() (jamais défini).
+import '../js/live/view.js';
+import '../js/live/drawer.js';
+import '../js/live/leave.js';
+import '../js/night/view.js';
 
-// live/controller.js et night/controller.js sont importés de façon
-// statique par ui.js (jamais réinstanciés malgré le suffixe de requête
-// ci-dessous, cf. leur commentaire sur resetLiveForTests/resetNightForTests) :
+// live/controller.js et night/controller.js sont des singletons (import
+// statique depuis app.js en production, et directement ici en test) :
 // sans ce reset, une session laissée ouverte par un cas de test bloquerait
-// silencieusement le suivant.
+// silencieusement le suivant (cf. leur commentaire sur
+// resetLiveForTests/resetNightForTests).
 test.afterEach(() => { resetClock(); resetLiveForTests(); resetNightForTests(); });
-
-async function importFreshUi() {
-  return import(`../js/ui.js?t=${Date.now()}-${Math.random()}`);
-}
 
 function seed(dom, mutate) {
   const state = defaultState();
@@ -43,12 +49,10 @@ function holdBtn(dom) {
 }
 
 // Amène l'app jusqu'à l'écran live, prête à confirmer la première étape.
-async function reachLive(dom, state) {
-  const ui = await importFreshUi();
-  ui.showPreview(state.activeProfileId);
+function reachLive(dom, state) {
+  showPreview(state.activeProfileId);
   const cta = byClass(dom.app, 'btn--primary');
   dom.fireEvent(cta, 'click');
-  return ui;
 }
 
 // ─── 1. Geste accompli ──────────────────────────────────────────
@@ -57,7 +61,7 @@ test('R2 · geste accompli (maintien 600ms) fait avancer d\'exactement une étap
   const dom = installTinyDom();
   const fake = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  await reachLive(dom, state);
+  reachLive(dom, state);
 
   const first = currentStepLabel(dom);
   assert.ok(first, 'aucune étape affichée après le lancement de la session');
@@ -76,7 +80,7 @@ test('R2 · un appui relâché avant 600ms n\'avance rien (R3 : n\'écrit rien n
   const dom = installTinyDom();
   const fake = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  await reachLive(dom, state);
+  reachLive(dom, state);
 
   const before = currentStepLabel(dom);
   const btn = holdBtn(dom);
@@ -94,7 +98,7 @@ test('R2 · un pointercancel avant 600ms n\'avance rien', async () => {
   const dom = installTinyDom();
   const fake = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  await reachLive(dom, state);
+  reachLive(dom, state);
 
   const before = currentStepLabel(dom);
   const btn = holdBtn(dom);
@@ -112,7 +116,7 @@ test('R2 · bug de la douche : le temps qui passe seul ne fait JAMAIS avancer l\
   const dom = installTinyDom();
   const fake = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  await reachLive(dom, state);
+  reachLive(dom, state);
 
   const before = currentStepLabel(dom);
 
@@ -139,7 +143,7 @@ test('R2 · bug de la douche, variante clavier : une touche maintenue tres longt
   const dom = installTinyDom();
   const fake = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  await reachLive(dom, state);
+  reachLive(dom, state);
   const before = currentStepLabel(dom);
 
   const btn = holdBtn(dom);
@@ -165,9 +169,7 @@ test('R2 · réveil : l\'aube logicielle ne lance jamais le direct, seul un gest
   const state = seed(dom, (s) => {
     s.bedside = { wakeTime: '07:00', profileId: s.activeProfileId, lightLeadMin: 10, sound: false };
   });
-  const ui = await importFreshUi();
-
-  ui.showBedsideSetup();
+  showBedsideSetup();
   const cta = byClass(dom.app, 'btn--primary');
   dom.fireEvent(cta, 'click'); // "Bonne nuit" : arme le chevet, lance la nuit
 

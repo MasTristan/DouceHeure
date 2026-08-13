@@ -51,10 +51,12 @@ douce-heure/
   js/
     store.js              état persistant localStorage v2 + migration
     time.js               utilitaires toMin, fromMin
+    now.js                contexte temporel courant (ctxNow, nowMinutes)
     predict.js            apprentissage on-device + trajets + marge invisible
     plan.js               séquence à rebours + rattrapage
     travel.js             destinations + trajets en attente
     bedside.js            logique temporelle du mode chevet
+    learned.js            ce que l'app a appris, en données pures
     backup.js             export/import JSON validé
     audio.js              signatures pentatoniques, nappe, son de réveil
     speech.js             guidage vocal
@@ -64,14 +66,21 @@ douce-heure/
     card.js               carte du matin (canvas + partage)
     wakelock.js           maintien écran allumé
     social.js             liens vers les proches (sms, WhatsApp...)
-    ui.js                 rendu des écrans, navigation
+    clock.js              horloge et minuteries injectables
+    confirm-control.js    machine d'état du geste de confirmation
+    live.js               décision pure d'avancement du guidage en direct
+    copy.js                tous les textes affichés et prononcés
     studio.js             compositeur de départs
-    app.js                orchestration, démarrage, paramètres d'URL
+    app.js                point de composition : démarrage, paramètres d'URL
+    ui/                   dom.js, shell.js, nav.js, gesture.js (socle du rendu)
+    live/                 état et rendu du guidage en direct (F2/F3/F4)
+    night/                état et rendu du mode chevet (F1)
+    screens/              les huit écrans plats (onboarding, accueil, aperçu...)
   assets/fonts/           woff2 auto-hébergés
   tests/                  tests node de la logique pure
 ```
 
-La logique métier (`store`, `time`, `predict`, `plan`, `travel`, `bedside`) ne touche jamais au DOM. Le rendu (`ui`, `studio`) ne contient aucune règle de calcul.
+La logique métier (`store`, `time`, `now`, `predict`, `plan`, `travel`, `bedside`, `learned`) ne touche jamais au DOM. Le rendu (`ui/*`, `live/*`, `night/*`, `screens/*`, `studio`) ne contient aucune règle de calcul.
 
 ## État des données
 

@@ -57,10 +57,12 @@ douce-heure/
   js/
     store.js              # état persistant localStorage v2 + migrate()
     time.js               # toMin, fromMin
+    now.js                # ctxNow, nowMinutes (horloge -> contexte courant)
     predict.js            # apprentissage on-device + predictTravel + marge
-    plan.js               # séquence à rebours + rattrapage (F3)
+    plan.js                # séquence à rebours + rattrapage (F3)
     travel.js             # destinations + pendingTrip (F5)
     bedside.js            # logique temporelle du mode chevet (F1)
+    learned.js            # ce que l'app a appris, données pures (S1 §4)
     backup.js             # export/import JSON validé (F7)
     audio.js              # signatures pentatoniques, nappe, son de réveil
     speech.js             # guidage vocal speechSynthesis (F2)
@@ -70,16 +72,47 @@ douce-heure/
     card.js               # carte du matin, canvas 1080x1920 + partage
     wakelock.js           # maintien écran allumé
     social.js             # liens sms/mailto vers les proches (réels)
-    ui.js                 # rendu des écrans, navigation
+    clock.js              # horloge et minuteries injectables (ADR-004)
+    confirm-control.js    # machine d'état du geste de confirmation (R2)
+    live.js               # décision pure d'avancement du live (S1 §4)
+    copy.js                # tous les textes affichés et prononcés
     studio.js             # compositeur de départs
-    app.js                # orchestration, démarrage, paramètres d'URL (F8)
+    app.js                # point de composition : orchestration, démarrage,
+                           # paramètres d'URL (F8), registre ui/nav.js
+    ui/
+      dom.js               # helpers DOM sans état (el, wordmark, toast...)
+      shell.js             # racine #app, écran courant, applySettings
+      nav.js               # registre de navigation entre écrans plats
+      gesture.js           # holdButton (les quatre chemins du geste, R2)
+    live/
+      registry.js          # registre interne au sous-système live
+      controller.js        # état + confirmNext (R2/R3), jamais d'avance seul
+      view.js              # rendu de l'écran live et de la pause
+      drawer.js            # tiroir de séquence (sauter, réordonner, F6)
+      leave.js             # écran de départ, "Je pars" (F5)
+    night/
+      registry.js          # registre interne au sous-système chevet
+      controller.js        # startNight/stopNight/nightTick (F1)
+      view.js               # écran de nuit, proposition de réveil, bonjour
+      setup.js              # écran de réglage avant "Bonne nuit"
+    screens/               # les huit écrans plats, reliés via ui/nav.js
+      onboarding.js
+      home.js               # carrefour de l'app
+      preview.js
+      trip.js
+      feedback.js           # + la carte du matin (spec v2 §11)
+      mornings.js
+      settings.js
+      social.js
   assets/
     fonts/                # woff2 auto-hébergés (Fraunces, Outfit, Atkinson)
   tests/                  # tests node (node --test tests/*.test.mjs)
   CLAUDE.md               # ce fichier
 ```
 
-**Séparation stricte** : la logique métier (`store`, `time`, `predict`, `plan`, `travel`, `bedside`, validation de `backup`) ne touche jamais au DOM. Le rendu (`ui`, `studio`) ne contient aucune règle de calcul. Cette séparation rend la logique testable sans navigateur. Ne pas la casser.
+**Séparation stricte** : la logique métier (`store`, `time`, `now`, `predict`, `plan`, `travel`, `bedside`, `learned`, validation de `backup`) ne touche jamais au DOM. Le rendu (`ui/*`, `live/*`, `night/*`, `screens/*`, `studio`) ne contient aucune règle de calcul. Cette séparation rend la logique testable sans navigateur. Ne pas la casser.
+
+**Navigation entre écrans** : jamais d'import statique direct d'un écran vers un autre en dehors d'une paire naturelle (`live/*` entre eux via `live/registry.js`, `night/*` entre eux via `night/registry.js`). Toute autre navigation passe par le registre `ui/nav.js`, rempli une seule fois au démarrage par `app.js`. C'est ce qui casse les cycles inévitables sinon (`home` est un carrefour vers presque tous les autres écrans).
 
 ---
 

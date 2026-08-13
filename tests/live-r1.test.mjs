@@ -12,12 +12,22 @@ import { installFakeClock, resetClock } from '../js/clock.js';
 import { defaultState } from '../js/store.js';
 import { resetLiveForTests } from '../js/live/controller.js';
 import { resetNightForTests } from '../js/night/controller.js';
+import { showPreview } from '../js/screens/preview.js';
+import { showBedsideSetup } from '../js/night/setup.js';
+// Auto-enregistrement dans liveNav/nightNav (S1 §4) : en production, seul
+// app.js importe ces modules pour cet effet de bord. Sans cet import ici,
+// startLive()/nightTick() plantent au premier appel à
+// liveNav.renderLive()/nightNav.renderNight() (jamais défini).
+import '../js/live/view.js';
+import '../js/live/drawer.js';
+import '../js/live/leave.js';
+import '../js/night/view.js';
 
-// live/controller.js et night/controller.js sont importés de façon
-// statique par ui.js (jamais réinstanciés malgré le suffixe de requête
-// ci-dessous, cf. leur commentaire sur resetLiveForTests/resetNightForTests) :
+// live/controller.js et night/controller.js sont des singletons (import
+// statique depuis app.js en production, et directement ici en test) :
 // sans ce reset, une session laissée ouverte par un cas de test bloquerait
-// silencieusement le suivant.
+// silencieusement le suivant (cf. leur commentaire sur
+// resetLiveForTests/resetNightForTests).
 test.afterEach(() => { resetClock(); resetLiveForTests(); resetNightForTests(); });
 
 // Même liste que tests/copy.test.mjs (R1), appliquée ici au texte rendu.
@@ -38,10 +48,6 @@ function assertClean(text, where) {
   }
 }
 
-async function importFreshUi() {
-  return import(`../js/ui.js?t=${Date.now()}-${Math.random()}`);
-}
-
 function seed(dom, mutate) {
   const state = defaultState();
   state.onboarded = true;
@@ -54,8 +60,7 @@ test('R1 · l\'Aperçu ne contient aucune formulation interdite', async () => {
   const dom = installTinyDom();
   installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  const ui = await importFreshUi();
-  ui.showPreview(state.activeProfileId);
+  showPreview(state.activeProfileId);
   assertClean(allText(dom.app), 'Aperçu');
 });
 
@@ -63,8 +68,7 @@ test('R1 · l\'écran live ne contient aucune formulation interdite, à l\'état
   const dom = installTinyDom();
   installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  const ui = await importFreshUi();
-  ui.showPreview(state.activeProfileId);
+  showPreview(state.activeProfileId);
   const cta = byClass(dom.app, 'btn--primary');
   dom.fireEvent(cta, 'click');
   assertClean(allText(dom.app), 'live (état normal)');
@@ -74,8 +78,7 @@ test('R1 · l\'écran live ne contient aucune formulation interdite à l\'état 
   const dom = installTinyDom();
   const fake = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  const ui = await importFreshUi();
-  ui.showPreview(state.activeProfileId);
+  showPreview(state.activeProfileId);
   dom.fireEvent(byClass(dom.app, 'btn--primary'), 'click');
 
   // L'étape "wakeup" par défaut dure 5 min (store.js DEFAULT_STEPS) : on
@@ -88,8 +91,7 @@ test('R1 · l\'écran live ne contient aucune formulation interdite à l\'état 
   const dom = installTinyDom();
   const fake = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  const ui = await importFreshUi();
-  ui.showPreview(state.activeProfileId);
+  showPreview(state.activeProfileId);
   dom.fireEvent(byClass(dom.app, 'btn--primary'), 'click');
 
   // nudgeThreshold = max(dur*1.6, dur+4) ; pour dur=5, seuil = 9 min.
@@ -101,8 +103,7 @@ test('R1 · l\'écran de départ (leave) ne contient aucune formulation interdit
   const dom = installTinyDom();
   const fake = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  const ui = await importFreshUi();
-  ui.showPreview(state.activeProfileId);
+  showPreview(state.activeProfileId);
   dom.fireEvent(byClass(dom.app, 'btn--primary'), 'click');
 
   // Confirme toutes les étapes jusqu'au départ.
@@ -122,8 +123,7 @@ test('R1 · le mode chevet (nuit, proposition de réveil) ne contient aucune for
   const state = seed(dom, (s) => {
     s.bedside = { wakeTime: '07:00', profileId: s.activeProfileId, lightLeadMin: 10, sound: false };
   });
-  const ui = await importFreshUi();
-  ui.showBedsideSetup();
+  showBedsideSetup();
   dom.fireEvent(byClass(dom.app, 'btn--primary'), 'click');
 
   assertClean(allText(dom.app), 'chevet (nuit, avant l\'aube)');

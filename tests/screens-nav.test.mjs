@@ -13,24 +13,30 @@ import { defaultState } from '../js/store.js';
 import { UI } from '../js/copy.js';
 import { resetLiveForTests } from '../js/live/controller.js';
 import { resetNightForTests } from '../js/night/controller.js';
+import { showHome } from '../js/screens/home.js';
+import { showPreview } from '../js/screens/preview.js';
+import { showOnboarding } from '../js/screens/onboarding.js';
+import { showTrip } from '../js/screens/trip.js';
+import { showFeedback } from '../js/screens/feedback.js';
+import { showMornings } from '../js/screens/mornings.js';
+import { showSettings } from '../js/screens/settings.js';
+import { showSocial } from '../js/screens/social.js';
+import { registerScreens } from '../js/ui/nav.js';
+
+// Chaque écran plat appelle nav.xxx() (ui/nav.js) pour naviguer vers un
+// autre écran plat : sans l'enregistrement que app.js fait au démarrage
+// réel, ces appels échoueraient (nav.xxx is not a function). On reproduit
+// ici uniquement cet enregistrement, pas le reste du démarrage de app.js
+// (service worker, canvas de scène, pont Raccourcis F8 : hors périmètre de
+// ce fichier et non pertinents dans le DOM factice). Ces écrans n'ont pas
+// d'état propre à réinitialiser entre les tests (contrairement à
+// live/night) : l'enregistrement une seule fois, ici, suffit.
+registerScreens({
+  home: showHome, trip: showTrip, feedback: showFeedback, preview: showPreview,
+  mornings: showMornings, settings: showSettings, social: showSocial,
+});
 
 test.afterEach(() => { resetClock(); resetLiveForTests(); resetNightForTests(); });
-
-async function importFreshApp() {
-  // Chaque écran plat appelle nav.xxx() (ui/nav.js) pour naviguer vers un
-  // autre écran plat : sans l'enregistrement que app.js fait au démarrage
-  // réel, ces appels échoueraient (nav.xxx is not a function). On reproduit
-  // ici uniquement ce enregistrement, pas le reste du démarrage de app.js
-  // (service worker, canvas de scène, pont Raccourcis F8 : hors périmètre
-  // de ce test et non pertinents dans le DOM factice).
-  const ui = await import(`../js/ui.js?t=${Date.now()}-${Math.random()}`);
-  const { registerScreens } = await import('../js/ui/nav.js');
-  registerScreens({
-    home: ui.showHome, trip: ui.showTrip, feedback: ui.showFeedback, preview: ui.showPreview,
-    mornings: ui.showMornings, settings: ui.showSettings, social: ui.showSocial,
-  });
-  return ui;
-}
 
 function seed(dom) {
   const state = defaultState();
@@ -43,8 +49,7 @@ test('accueil -> mes matins -> accueil', async () => {
   const dom = installTinyDom();
   installFakeClock(Date.parse('2026-08-05T09:00:00'));
   seed(dom);
-  const ui = await importFreshApp();
-  ui.showHome();
+  showHome();
 
   const morningsLink = byExactText(dom.app, UI.home_mornings_link);
   assert.ok(morningsLink, 'lien "mes matins" introuvable sur l\'accueil');
@@ -59,8 +64,7 @@ test('accueil -> reglages -> mes proches -> reglages -> accueil', async () => {
   const dom = installTinyDom();
   installFakeClock(Date.parse('2026-08-05T09:00:00'));
   seed(dom);
-  const ui = await importFreshApp();
-  ui.showHome();
+  showHome();
 
   const settingsLink = byExactText(dom.app, UI.home_settings_link);
   dom.fireEvent(settingsLink, 'click');
@@ -84,8 +88,7 @@ test('accueil -> apercu -> accueil (bouton retour)', async () => {
   const dom = installTinyDom();
   installFakeClock(Date.parse('2026-08-05T09:00:00'));
   const state = seed(dom);
-  const ui = await importFreshApp();
-  ui.showPreview(state.activeProfileId);
+  showPreview(state.activeProfileId);
   assert.ok(byExactText(dom.app, UI.preview_back), 'l\'écran aperçu n\'est pas apparu');
 
   dom.fireEvent(byExactText(dom.app, UI.preview_back), 'click');
@@ -98,8 +101,7 @@ test('onboarding termine -> accueil', async () => {
   const state = defaultState();
   state.onboarded = false;
   dom.localStorage.setItem('douce-heure:v1', JSON.stringify(state));
-  const ui = await importFreshApp();
-  ui.showOnboarding();
+  showOnboarding();
 
   // Ecran 1 "passer" saute directement a l'accueil.
   const skipBtn = byExactText(dom.app, UI.ob_skip);

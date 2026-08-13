@@ -9,16 +9,20 @@ import { installFakeClock, resetClock } from '../js/clock.js';
 import { defaultState } from '../js/store.js';
 import { UI } from '../js/copy.js';
 import { resetLiveForTests } from '../js/live/controller.js';
+import { showPreview } from '../js/screens/preview.js';
+// Auto-enregistrement dans liveNav (S1 §4) : en production, seul app.js
+// importe ces modules pour cet effet de bord. Sans cet import ici,
+// startLive() plante au premier appel à liveNav.renderLive() (jamais
+// défini).
+import '../js/live/view.js';
+import '../js/live/drawer.js';
+import '../js/live/leave.js';
 
-// live/controller.js est importé de façon statique par ui.js (jamais
-// réinstancié malgré le suffixe de requête ci-dessous, cf. son commentaire
-// sur resetLiveForTests) : sans ce reset, une session laissée ouverte par
-// un cas de test bloquerait silencieusement le suivant.
+// live/controller.js est un singleton (import statique depuis app.js en
+// production, et directement ici en test) : sans ce reset, une session
+// laissée ouverte par un cas de test bloquerait silencieusement le
+// suivant (cf. son commentaire sur resetLiveForTests).
 test.afterEach(() => { resetClock(); resetLiveForTests(); });
-
-async function importFreshUi() {
-  return import(`../js/ui.js?t=${Date.now()}-${Math.random()}`);
-}
 
 function seed(dom) {
   const state = defaultState();
@@ -33,18 +37,16 @@ function readPersistedSteps(dom, profileId) {
   return state.profiles.find((p) => p.id === profileId).steps;
 }
 
-async function reachLive(dom, state) {
-  const ui = await importFreshUi();
-  ui.showPreview(state.activeProfileId);
+function reachLive(dom, state) {
+  showPreview(state.activeProfileId);
   dom.fireEvent(byClass(dom.app, 'btn--primary'), 'click');
-  return ui;
 }
 
 test('R3 · un appui interrompu avant 600ms n\'écrit rien dans step.real', async () => {
   const dom = installTinyDom();
   const fake = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  await reachLive(dom, state);
+  reachLive(dom, state);
 
   const btn = byClass(dom.app, 'hold-btn');
   dom.fireEvent(btn, 'pointerdown');
@@ -64,7 +66,7 @@ test('R3 · une étape sautée depuis le tiroir n\'écrit rien pour cette étape
   const dom = installTinyDom();
   const fake = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  await reachLive(dom, state);
+  reachLive(dom, state);
 
   // Confirme la première étape normalement (pour avoir une mesure de
   // référence ailleurs), puis saute la deuxième depuis le tiroir.
@@ -103,7 +105,7 @@ test('R3 · une étape polluée par un imprévu (pause puis reprise) n\'écrit r
   const dom = installTinyDom();
   const fake = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  await reachLive(dom, state);
+  reachLive(dom, state);
 
   // Ouvre le tiroir pour déclencher l'imprévu (F6) sur l'étape courante.
   const drawerOpenBtn = byExactText(dom.app, UI.live_drawer_open);
@@ -135,7 +137,7 @@ test('R3 (positif) : une session normale, sans incident, écrit bien les mesures
   const dom = installTinyDom();
   const fake = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  await reachLive(dom, state);
+  reachLive(dom, state);
 
   let confirmedCount = 0;
   for (let i = 0; i < 10; i++) {

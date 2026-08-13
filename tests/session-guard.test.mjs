@@ -12,17 +12,22 @@ import { installFakeClock, resetClock } from '../js/clock.js';
 import { defaultState } from '../js/store.js';
 import { resetLiveForTests } from '../js/live/controller.js';
 import { resetNightForTests } from '../js/night/controller.js';
+import { showPreview } from '../js/screens/preview.js';
+import { showBedsideSetup } from '../js/night/setup.js';
+// Auto-enregistrement dans liveNav/nightNav (S1 §4) : en production, seul
+// app.js importe ces modules pour cet effet de bord. Sans cet import ici,
+// startLive()/startNight() plantent au premier appel à
+// liveNav.renderLive()/nightNav.renderNight() (jamais défini).
+import '../js/live/view.js';
+import '../js/live/drawer.js';
+import '../js/live/leave.js';
+import '../js/night/view.js';
 
-// live/controller.js et night/controller.js sont importés de façon
-// statique par ui.js (jamais réinstanciés malgré le suffixe de requête
-// ci-dessous, cf. leur commentaire sur resetLiveForTests/resetNightForTests) :
-// sans ce reset, une session laissée ouverte par un cas de test bloquerait
-// silencieusement le suivant.
+// live/controller.js et night/controller.js sont des singletons : sans ce
+// reset, une session laissée ouverte par un cas de test bloquerait
+// silencieusement le suivant (cf. leur commentaire sur
+// resetLiveForTests/resetNightForTests).
 test.afterEach(() => { resetClock(); resetLiveForTests(); resetNightForTests(); });
-
-async function importFreshUi() {
-  return import(`../js/ui.js?t=${Date.now()}-${Math.random()}`);
-}
 
 function seed(dom, mutate) {
   const state = defaultState();
@@ -36,8 +41,7 @@ test('startLive : un double tap sur le CTA ne cree pas un second ticker fantome'
   const dom = installTinyDom();
   const fake = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const state = seed(dom);
-  const ui = await importFreshUi();
-  ui.showPreview(state.activeProfileId);
+  showPreview(state.activeProfileId);
 
   const cta = byClass(dom.app, 'btn--primary');
   dom.fireEvent(cta, 'click'); // premier tap : demarre la session
@@ -55,8 +59,7 @@ test('startNight : un double tap sur "Bonne nuit" ne cree pas un second ticker f
   const state = seed(dom, (s) => {
     s.bedside = { wakeTime: '07:00', profileId: s.activeProfileId, lightLeadMin: 10, sound: false };
   });
-  const ui = await importFreshUi();
-  ui.showBedsideSetup();
+  showBedsideSetup();
 
   const cta = byClass(dom.app, 'btn--primary');
   dom.fireEvent(cta, 'click');

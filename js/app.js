@@ -7,11 +7,28 @@ import * as haptics from './haptics.js';
 import * as speech from './speech.js';
 import * as scene from './scene.js';
 import { UI } from './copy.js';
-import {
-  showHome, showPreview, showOnboarding, showBedsideSetup, showTrip, showFeedback,
-  showMornings, showSettings, showSocial,
-} from './ui.js';
+import { showHome } from './screens/home.js';
+import { showPreview } from './screens/preview.js';
+import { showOnboarding } from './screens/onboarding.js';
+import { showTrip } from './screens/trip.js';
+import { showFeedback } from './screens/feedback.js';
+import { showMornings } from './screens/mornings.js';
+import { showSettings } from './screens/settings.js';
+import { showSocial } from './screens/social.js';
+import { showBedsideSetup } from './night/setup.js';
 import { registerScreens } from './ui/nav.js';
+// J1 découpe étape 7 : app.js est désormais le point de composition (la
+// façade ui.js a disparu). live/view.js, live/drawer.js, live/leave.js et
+// night/view.js ne sont importés nulle part ailleurs : sans cet import,
+// leur auto-enregistrement dans liveNav/nightNav ne se produirait jamais,
+// et live/controller.js et night/controller.js planteraient au premier
+// appel à liveNav.renderLive()/nightNav.renderNight() (S1 §4).
+import './live/controller.js';
+import './live/view.js';
+import './live/drawer.js';
+import './live/leave.js';
+import './night/controller.js';
+import './night/view.js';
 
 // J1 découpe étape 3 (Nour, R1 §1.3) : registre de navigation rempli une
 // fois ici, au démarrage. Casse le cycle d'imports studio.js <-> ui.js

@@ -2,7 +2,7 @@
 // Cache versionné explicite (spec v2 §17) : app 100 % offline après
 // premier chargement, polices auto-hébergées comprises.
 
-const VERSION = 'v2.2.0'; // J1 découpe étape 6 : js/screens/*, js/learned.js
+const VERSION = 'v2.3.0'; // J1 découpe étape 7 : suppression de la façade js/ui.js
 const CACHE = `douce-heure-${VERSION}`;
 
 const ASSETS = [
@@ -35,7 +35,6 @@ const ASSETS = [
   './js/learned.js',
   './js/copy.js',
   './js/social.js',
-  './js/ui.js',
   './js/ui/dom.js',
   './js/ui/shell.js',
   './js/ui/nav.js',

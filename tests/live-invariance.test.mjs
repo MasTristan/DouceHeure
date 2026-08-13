@@ -20,12 +20,16 @@ import { installFakeClock, resetClock } from '../js/clock.js';
 import { defaultState } from '../js/store.js';
 import { COPY } from '../js/copy.js';
 import { resetLiveForTests } from '../js/live/controller.js';
+import { showPreview } from '../js/screens/preview.js';
+// Auto-enregistrement dans liveNav (S1 §4) : en production, seul app.js
+// importe ces modules pour cet effet de bord. Sans cet import ici,
+// startLive() plante au premier appel à liveNav.renderLive() (jamais
+// défini).
+import '../js/live/view.js';
+import '../js/live/drawer.js';
+import '../js/live/leave.js';
 
 test.afterEach(() => { resetClock(); resetLiveForTests(); });
-
-async function importFreshUi() {
-  return import(`../js/ui.js?t=${Date.now()}-${Math.random()}`);
-}
 
 function coldState() {
   const state = defaultState();
@@ -47,14 +51,13 @@ function warmState() {
   return state;
 }
 
-async function renderLiveScreen(dom, state) {
-  // live/controller.js est un singleton (import statique de ui.js, jamais
-  // réinstancié) : chaque test ici lance DEUX sessions (froide puis
-  // nourrie) dans le même cas, la deuxième doit donc trouver `live` déjà
-  // reparti à zéro, sinon startLive() no-op silencieusement (if (live) return;).
+function renderLiveScreen(dom, state) {
+  // live/controller.js est un singleton : chaque test ici lance DEUX
+  // sessions (froide puis nourrie) dans le même cas, la deuxième doit donc
+  // trouver `live` déjà reparti à zéro, sinon startLive() no-op
+  // silencieusement (if (live) return;).
   resetLiveForTests();
-  const ui = await importFreshUi();
-  ui.showPreview(state.activeProfileId);
+  showPreview(state.activeProfileId);
   dom.fireEvent(byClass(dom.app, 'btn--primary'), 'click');
 }
 
@@ -63,13 +66,13 @@ test('ADR-003 : le live rendu sous modèle froid et sous modèle nourri est indi
   installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const stateA = coldState();
   domA.localStorage.setItem('douce-heure:v1', JSON.stringify(stateA));
-  await renderLiveScreen(domA, stateA);
+  renderLiveScreen(domA, stateA);
 
   const domB = installTinyDom();
   installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const stateB = warmState();
   domB.localStorage.setItem('douce-heure:v1', JSON.stringify(stateB));
-  await renderLiveScreen(domB, stateB);
+  renderLiveScreen(domB, stateB);
 
   const firstStepKey = stateA.profiles.find((p) => p.id === stateA.activeProfileId).steps[0].key;
 
@@ -108,14 +111,14 @@ test('ADR-003 : indiscernable aussi à l\'état "suggested" (l\'étape a dépass
   const fakeA = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const stateA = coldState();
   domA.localStorage.setItem('douce-heure:v1', JSON.stringify(stateA));
-  await renderLiveScreen(domA, stateA);
+  renderLiveScreen(domA, stateA);
   fakeA.tick(30 * 60000); // dépasse largement dur, quel que soit le modèle
 
   const domB = installTinyDom();
   const fakeB = installFakeClock(Date.parse('2026-08-05T07:00:00'));
   const stateB = warmState();
   domB.localStorage.setItem('douce-heure:v1', JSON.stringify(stateB));
-  await renderLiveScreen(domB, stateB);
+  renderLiveScreen(domB, stateB);
   fakeB.tick(30 * 60000);
 
   assert.equal(
