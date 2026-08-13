@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    name: node --test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Aucune étape d'installation : ce fichier est la preuve vivante de la
+      # contrainte zéro dépendance (ADR-001). Le dépôt n'a ni node_modules ni
+      # fichier de verrouillage. Si une étape d'installation apparaît un
+      # jour ici, c'est le signal que la décision a été enfreinte.
+      - run: node --test tests/*.test.mjs

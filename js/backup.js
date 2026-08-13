@@ -89,6 +89,7 @@ export function validateImport(raw) {
     destinations: arr(data.destinations).map(sanitizeDestination).filter(Boolean),
     bedside: null,
     pendingTrip: null,
+    pendingSession: null,
     history: arr(data.history)
       .filter((h) => h && typeof h.ts === 'number' && ['early', 'ontime', 'late'].includes(h.status))
       .map((h) => ({ ts: h.ts, status: h.status, day: num(h.day, 0), type: str(h.type, 'other'), profileId: typeof h.profileId === 'string' ? h.profileId : null })),

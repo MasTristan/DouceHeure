@@ -1,9 +1,11 @@
 // Maintien de l'écran allumé pendant le live (pivot app-ouverte, cf. CLAUDE.md §3.2).
 
 let lock = null;
+let wanted = false;
 
 export async function acquire() {
   if (!('wakeLock' in navigator)) return false;
+  wanted = true;
   try {
     lock = await navigator.wakeLock.request('screen');
     lock.addEventListener('release', () => { lock = null; });
@@ -14,6 +16,7 @@ export async function acquire() {
 }
 
 export function release() {
+  wanted = false;
   if (lock) {
     try { lock.release(); } catch {}
     lock = null;
@@ -25,6 +28,6 @@ export function bindVisibility() {
   if (bound) return;
   bound = true;
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && !lock) acquire();
+    if (document.visibilityState === 'visible' && wanted && !lock) acquire();
   });
 }

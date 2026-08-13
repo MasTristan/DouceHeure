@@ -50,6 +50,13 @@ export const ARCHETYPES = [
 export const MAX_PROFILES = 6;
 export const MAX_STEPS = 8;
 export const MAX_REAL = 8;
+export const MAX_HISTORY = 200;
+
+// FIFO : ne garde que les MAX_HISTORY entrées les plus récentes.
+export function capHistory(history) {
+  const arr = Array.isArray(history) ? history : [];
+  return arr.length > MAX_HISTORY ? arr.slice(-MAX_HISTORY) : arr;
+}
 
 let checklistSeq = 0;
 export function makeChecklist(labels) {
@@ -101,10 +108,35 @@ export function defaultState() {
     destinations: [],
     bedside: null,
     pendingTrip: null,
+    pendingSession: null,
     history: [],
     routine: null,
     contacts: [],
   };
+}
+
+// B1 · Marqueur léger d'une session live en cours, indépendant des mesures
+// elles-mêmes (déjà écrites au fil de l'eau par recordDurations). Sert
+// uniquement à purger silencieusement une session interrompue depuis trop
+// longtemps, sur le même principe que pendingTrip (travel.js).
+export const PENDING_SESSION_PURGE_MS = 8 * 60 * 60 * 1000; // 8 h
+
+export function startPendingSession(state, profileId, ctx, now = Date.now()) {
+  state.pendingSession = { profileId, ctx, startedTs: now };
+}
+
+export function clearPendingSession(state) {
+  state.pendingSession = null;
+}
+
+// Purge silencieuse (R5) : pas de message, pas d'écriture, juste l'oubli
+// d'un marqueur périmé.
+export function purgePendingSession(state, now = Date.now()) {
+  if (state.pendingSession && now - state.pendingSession.startedTs > PENDING_SESSION_PURGE_MS) {
+    state.pendingSession = null;
+    return true;
+  }
+  return false;
 }
 
 function iconForEmoji(emoji) {
@@ -153,9 +185,10 @@ export function migrate(state) {
     state.settings.voice = { ...defaultSettings().voice, ...(state.settings.voice || {}) };
     state.destinations = state.destinations || [];
     state.contacts = state.contacts || [];
-    state.history = state.history || [];
+    state.history = capHistory(state.history || []);
     state.bedside = state.bedside || null;
     state.pendingTrip = state.pendingTrip || null;
+    state.pendingSession = state.pendingSession || null;
     if (!state.profiles?.length) state.profiles = defaultState().profiles;
     if (!state.profiles.find((p) => p.id === state.activeProfileId)) {
       state.activeProfileId = state.profiles[0].id;
@@ -171,7 +204,7 @@ export function migrate(state) {
   next.settings.sound = state.sound !== false;
   next.routine = state.routine || null;
   next.contacts = state.contacts || [];
-  next.history = (state.history || []).map((h) => ({ ...h, profileId: h.profileId ?? null }));
+  next.history = capHistory((state.history || []).map((h) => ({ ...h, profileId: h.profileId ?? null })));
 
   if (Array.isArray(state.profiles) && state.profiles.length) {
     next.profiles = state.profiles.map((p) => migrateProfile(p, state.routine));
@@ -210,8 +243,15 @@ export function loadState() {
   }
 }
 
+// Échec silencieux (R5) : un quota dépassé au milieu d'une confirmation ne
+// doit jamais casser le matin en cours. La donnée en mémoire reste correcte,
+// seule la persistance rate ; le prochain écrit réussi la rattrapera.
 export function saveState(state) {
-  localStorage.setItem(KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(KEY, JSON.stringify(state));
+  } catch {
+    // volontairement silencieux
+  }
 }
 
 export function getActiveProfile(state) {
@@ -220,6 +260,18 @@ export function getActiveProfile(state) {
 
 export function getActiveSteps(state) {
   return getActiveProfile(state)?.steps || [];
+}
+
+// B7 · Persiste le transport et la destination choisis dans l'Aperçu, au
+// lancement de la session. Sans cela, confirmArrival() refuse d'écrire faute
+// de destination et la boucle d'apprentissage du trajet (F5) ne se ferme
+// jamais pour qui ne passe pas par le Studio.
+export function commitPreviewDefaults(state, profileId, { destinationId, transport } = {}) {
+  const profile = state.profiles?.find((p) => p.id === profileId);
+  if (!profile) return state;
+  profile.defaults.destinationId = destinationId ?? null;
+  if (transport) profile.defaults.transport = transport;
+  return state;
 }
 
 export function getProfile(state, id) {

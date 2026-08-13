@@ -2,7 +2,7 @@
 // Cache versionné explicite (spec v2 §17) : app 100 % offline après
 // premier chargement, polices auto-hébergées comprises.
 
-const VERSION = 'v2.0.0';
+const VERSION = 'v2.3.0'; // J1 découpe étape 7 : suppression de la façade js/ui.js
 const CACHE = `douce-heure-${VERSION}`;
 
 const ASSETS = [
@@ -28,9 +28,34 @@ const ASSETS = [
   './js/icons.js',
   './js/card.js',
   './js/wakelock.js',
+  './js/confirm-control.js',
+  './js/clock.js',
+  './js/now.js',
+  './js/live.js',
+  './js/learned.js',
   './js/copy.js',
   './js/social.js',
-  './js/ui.js',
+  './js/ui/dom.js',
+  './js/ui/shell.js',
+  './js/ui/nav.js',
+  './js/ui/gesture.js',
+  './js/live/registry.js',
+  './js/live/controller.js',
+  './js/live/view.js',
+  './js/live/drawer.js',
+  './js/live/leave.js',
+  './js/night/registry.js',
+  './js/night/controller.js',
+  './js/night/view.js',
+  './js/night/setup.js',
+  './js/screens/onboarding.js',
+  './js/screens/home.js',
+  './js/screens/preview.js',
+  './js/screens/trip.js',
+  './js/screens/feedback.js',
+  './js/screens/mornings.js',
+  './js/screens/settings.js',
+  './js/screens/social.js',
   './js/studio.js',
   './assets/icon.svg',
   './assets/icon-192.png',
@@ -66,6 +91,17 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
+// Repli explicite quand le reseau echoue et que rien n'est en cache : jamais
+// undefined, sinon la navigation se solde par un ecran blanc. Une navigation
+// retombe sur la coquille app (index.html, deja en cache) ; toute autre
+// ressource recoit une reponse d'erreur construite.
+function offlineFallback(req) {
+  if (req.mode === 'navigate' || req.destination === 'document') {
+    return caches.match('./index.html');
+  }
+  return new Response('', { status: 503, statusText: 'Hors ligne' });
+}
+
 // Cache d'abord, réseau en secours. Aucune donnée personnelle ne transite :
 // seules les ressources statiques de l'app passent ici.
 self.addEventListener('fetch', (e) => {
@@ -80,7 +116,7 @@ self.addEventListener('fetch', (e) => {
           caches.open(CACHE).then((c) => c.put(req, copy));
         }
         return res;
-      }).catch(() => cached);
+      }).catch(() => offlineFallback(req));
     })
   );
 });
