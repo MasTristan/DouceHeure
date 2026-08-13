@@ -250,6 +250,12 @@ export function installTinyDom() {
   Object.defineProperty(globalThis, 'navigator', { value: {}, configurable: true });
   globalThis.window = globalThis;
   globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+  // Plausible mais inerte : aucun test ne dépend de sa valeur exacte, seule
+  // sa présence compte (ex. settings.js construit une URL de raccourci).
+  Object.defineProperty(globalThis, 'location', {
+    value: { origin: 'https://douce-heure.invalid', pathname: '/', search: '', href: 'https://douce-heure.invalid/' },
+    configurable: true,
+  });
 
   return {
     document: document_,

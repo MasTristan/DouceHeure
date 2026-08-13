@@ -39,8 +39,10 @@ test('B7 : un profil inconnu ne leve pas et ne modifie rien', () => {
   assert.doesNotThrow(() => commitPreviewDefaults(state, 'profile_absent', { destinationId: 'x' }));
 });
 
-test('B7 : ui.js appelle bien commitPreviewDefaults avant de lancer la session', () => {
-  const src = fs.readFileSync(path.join(__dirname, '../js/ui.js'), 'utf8');
+test('B7 : screens/preview.js appelle bien commitPreviewDefaults avant de lancer la session', () => {
+  // showPreview vit depuis la découpe J1 étape 6 dans screens/preview.js,
+  // plus dans ui.js (Nour, R1 §1.4).
+  const src = fs.readFileSync(path.join(__dirname, '../js/screens/preview.js'), 'utf8');
   const ctaBlock = src.slice(src.indexOf('UI.preview_cta') - 600, src.indexOf('UI.preview_cta'));
   assert.match(ctaBlock, /commitPreviewDefaults\(/, 'le CTA de l\'Apercu ne persiste plus les defauts avant de lancer la session');
 });

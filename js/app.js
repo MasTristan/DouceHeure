@@ -7,7 +7,10 @@ import * as haptics from './haptics.js';
 import * as speech from './speech.js';
 import * as scene from './scene.js';
 import { UI } from './copy.js';
-import { showHome, showPreview, showOnboarding, showBedsideSetup, showTrip, showFeedback } from './ui.js';
+import {
+  showHome, showPreview, showOnboarding, showBedsideSetup, showTrip, showFeedback,
+  showMornings, showSettings, showSocial,
+} from './ui.js';
 import { registerScreens } from './ui/nav.js';
 
 // J1 découpe étape 3 (Nour, R1 §1.3) : registre de navigation rempli une
@@ -19,7 +22,14 @@ import { registerScreens } from './ui/nav.js';
 // importer ui.js (cycle interdit tant que ces écrans y restent).
 // J1 découpe étape 5 : preview ajouté pour que night/view.js
 // (renderGoodMorning) puisse y naviguer de la même façon.
-registerScreens({ home: showHome, trip: showTrip, feedback: showFeedback, preview: showPreview });
+// J1 découpe étape 6 : mornings/settings/social ajoutés, chaque écran
+// plat naviguant désormais vers un autre uniquement via ce registre
+// (jamais d'import direct entre deux fichiers de screens/, cycle garanti
+// sinon : home -> preview/mornings/settings, settings -> social/home...).
+registerScreens({
+  home: showHome, trip: showTrip, feedback: showFeedback, preview: showPreview,
+  mornings: showMornings, settings: showSettings, social: showSocial,
+});
 
 // Service Worker pour le cache hors-ligne. Toast discret quand une mise à
 // jour est prête, jamais bloquant.

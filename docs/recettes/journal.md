@@ -168,6 +168,53 @@ jamais arrêter explicitement celui du premier cas. Corps de `resetNightForTests
 de chevet"`, `startNight()` restant bloqué par `if (night) return;` sur l'état laissé par
 le premier cas. Restauré, 143/143 revérifié.
 
+## J1 étape 6 · Découpe des huit écrans plats et de `js/learned.js`
+
+Dernier morceau d'état, `js/learned.js` : la section "ce que l'app a appris" de
+`showMornings` calculait un jour lent par étape (moyenne par jour, comparaison au global)
+directement dans la couche de rendu, en violation de CLAUDE.md §4. Extrait en deux
+fonctions pures (`learnedSteps`, `learnedTravels`) qui rendent des DONNÉES (`{ label,
+slowDay }`, jamais une chaîne affichable) : la composition des phrases via `copy.js` reste
+dans `screens/mornings.js`, conformément à la convention du projet (tous les textes
+affichés viennent de `copy.js`, jamais d'un module de calcul). `tests/learned.test.mjs`
+couvre le seuil de 3 mesures et le bruit d'une seule mesure lente isolée qui ne doit pas
+ressortir.
+
+Les huit écrans (`onboarding`, `home`, `preview`, `trip`, `feedback` + `showCardOffer`,
+`mornings`, `settings`, `social`) sont bien plus interconnectés que `live/*` ou `night/*` :
+`home` est un carrefour vers presque tous les autres, et plusieurs écrans reviennent vers
+`home`. Plutôt qu'un registre local par paire de fichiers (comme `live/registry.js` ou
+`night/registry.js`), chaque écran passe par le registre déjà existant `ui/nav.js` pour
+atteindre n'importe quel autre écran : aucun fichier de `screens/` n'importe un autre
+fichier de `screens/` (vérifié par `tests/imports.test.mjs`, inchangé). `ui.js` devient une
+pure façade de réexport (27 lignes de substance), plus aucune fonction propre.
+
+Risque spécifique à cette étape, plus élevé qu'aux étapes 4/5 : `nav.xxx()` est un accès de
+propriété sur un objet ordinaire, jamais vérifié par l'analyse statique. Un nom mal
+orthographié (`nav.setttings`, une faute de frappe) ne casse rien à l'import ni aux tests
+existants (aucun ne cliquait jusqu'ici à travers ces écrans) : il ne se serait vu qu'au
+clic, en production. Nouveau fichier dédié, `tests/screens-nav.test.mjs`, qui clique
+réellement d'écran en écran (accueil → mes matins → accueil, accueil → réglages → mes
+proches → réglages → accueil, accueil → aperçu → accueil, fin d'onboarding → accueil).
+
+En écrivant ce test, deux lacunes réelles et préexistantes de l'infrastructure de test sont
+apparues (ni l'une ni l'autre une régression de cette découpe, simplement jamais
+exercées avant que `showSettings` ou son bouton de retour topbar ne soient cliqués dans un
+test) :
+
+- `tests/tiny-dom.mjs` ne définissait pas de global `location` : `showSettings` (l'URL de
+  raccourci, `location.origin`) levait `ReferenceError: location is not defined` dès qu'un
+  test le rendait réellement. Corrigé en ajoutant un stub inerte (même esprit que le stub
+  `matchMedia` déjà présent), utile à tout futur test qui rendrait cet écran.
+- Le sélecteur `.topbar button, [class*="topbar"] button` dans le brouillon du nouveau test
+  ne correspondait à rien (topbar utilise la classe `studio-back-btn`) : corrigé côté test,
+  pas côté production.
+
+Preuve au rouge, sur le risque réel de cette étape (une faute de frappe dans un `nav.xxx()`) :
+`nav.settings()` renommé en `nav.settingz()` dans `screens/home.js`. `tests/screens-nav.test.mjs`
+échoue avec `"nav.settingz is not a function"`, exactement le test concerné (réglages), les
+trois autres restant verts. Restauré, 154/154 revérifié.
+
 ---
 
 ## Méthode
