@@ -181,11 +181,3 @@ function ambientLightChanged() {
   if (cv && ctx2d && (document.hidden === false)) drawFrame(performance.now());
 }
 
-export function stopCanvas() {
-  cancelAnimationFrame(rafId);
-  for (const [ev, fn, target] of listeners) target.removeEventListener(ev, fn);
-  listeners = [];
-  if (cv && ctx2d) ctx2d.clearRect(0, 0, cv.width, cv.height);
-  cv = null;
-  ctx2d = null;
-}

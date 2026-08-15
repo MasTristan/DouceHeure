@@ -40,10 +40,6 @@ export function unlock() {
   return true;
 }
 
-export function isReady() {
-  return !!ctx && ctx.state === 'running';
-}
-
 export function setEnabled(v) { enabled = !!v; if (!enabled) { stopAmbient(); stopWake(); } }
 export function isEnabled() { return enabled; }
 

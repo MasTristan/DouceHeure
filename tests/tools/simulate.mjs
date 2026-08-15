@@ -35,6 +35,7 @@
 import { buildPlan, TRANSPORT_BUFFER } from '../../js/plan.js';
 import { recordDurations, recordOutcome } from '../../js/predict.js';
 import { defaultState, ARCHETYPES, makeProfileFromArchetype } from '../../js/store.js';
+import { addDestination } from '../../js/travel.js';
 import { toMin, fromMin } from '../../js/time.js';
 
 // ─── Aléatoire reproductible ──────────────────────────────────────
@@ -95,10 +96,16 @@ export function makeUser(rng, opts = {}) {
     };
   }
   const declaredTravel = opts.declaredTravel ?? DEFAULT_PROFILE.declaredTravel;
+  // Avec destination, le trajet réel se mesure entre « Je pars » et « Je
+  // suis arrivé » (F5) et finit par remplacer la valeur déclarative. Sans
+  // destination, l'app ne saura JAMAIS combien dure le trajet : c'est le
+  // parcours par défaut du produit, et il mérite d'être mesuré à part.
+  const destination = opts.withDestination ? addDestination(state, 'Bureau') : null;
   return {
     state,
     truth,
     bias,
+    destination,
     declaredTravel,
     trueTravel: { mean: declaredTravel * travelBias, sd: Math.max(1, declaredTravel * travelBias * travelNoise) },
     arrival: opts.arrival ?? DEFAULT_PROFILE.arrival,
@@ -123,11 +130,17 @@ export function declaredWakeTime(user, slack = 5) {
 // Rend le résultat d'un matin ET met à jour l'état de l'utilisateur
 // exactement comme le ferait une vraie session (R3 : seules des durées
 // réellement écoulées sont écrites).
-export function simulateMorning(user, ctx, rng) {
+// `aberrant` : ce matin-là, une étape prend 2,4 fois sa durée habituelle
+// (l'exemple de S4 article 3 : une douche à 45 minutes au lieu de 19). Sert
+// à mesurer combien de jours le moteur reste contaminé ensuite.
+export function simulateMorning(user, ctx, rng, aberrant = false) {
   const profile = user.state.profiles.find((p) => p.id === user.state.activeProfileId);
+  const destination = user.destination
+    ? user.state.destinations.find((d) => d.id === user.destination.id)
+    : null;
   const plan = buildPlan(
     profile.steps, user.arrival, user.declaredTravel, user.transport,
-    user.state.latenessScore, ctx, null,
+    user.state.latenessScore, ctx, destination,
   );
 
   // L'utilisateur se lève à l'heure proposée et enchaine les étapes.
@@ -136,7 +149,8 @@ export function simulateMorning(user, ctx, rng) {
   for (const step of plan.sequence) {
     if (step.key === 'leave') continue;
     const t = user.truth[step.key];
-    const real = Math.max(1, Math.round(normal(rng, t.mean, t.sd)));
+    let real = Math.max(1, Math.round(normal(rng, t.mean, t.sd)));
+    if (aberrant && step.key === 'shower') real = Math.round(real * 2.4);
     cursor += real;
     measurements.push({ stepKey: step.key, v: real });
   }
@@ -148,6 +162,12 @@ export function simulateMorning(user, ctx, rng) {
   const advance = plan.arrivalMin - arrivalActual;
   const status = advance < 0 ? 'late' : advance <= 5 ? 'ontime' : 'early';
 
+  // F5 · le trajet mesuré, borné à [5, 180] min comme en production (R3).
+  if (destination && travelActual >= 5 && travelActual <= 180) {
+    const bucket = (destination.byTransport[user.transport] ||= { real: [] });
+    bucket.real.push({ v: travelActual, day: ctx.day });
+    if (bucket.real.length > 8) bucket.real.shift();
+  }
   recordDurations(user.state, measurements, { ...ctx, profileId: profile.id });
   recordOutcome(user.state, status, { ...ctx, profileId: profile.id });
 

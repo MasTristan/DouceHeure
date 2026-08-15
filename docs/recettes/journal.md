@@ -407,6 +407,104 @@ chose avant d'ajouter, et le décider explicitement.
 
 ---
 
+## J3 · Le moteur (S4)
+
+### Ce que chaque article rapporte, mesuré séparément
+
+Population de 300 utilisateurs calibrés, 20 matins, avec destination (donc trajet appris).
+
+| | retard établi | avance | lever avant l'arrivée | marge |
+|---|---|---|---|---|
+| avant J3 | 2 % | 17,3 min | 110 min | 11,6 |
+| + article 1 (variances composées) | 2 % | 14,8 | 108 | 9,5 |
+| + articles 2 et 3 | 4 % | 12,4 | 107 | 8,1 |
+| + coefficients calibrés | **8 %** | **9,9** | **104** | **5,5** |
+
+**La cible d'ADR-002 est tenue** : 92 % de matins à l'heure ou en avance, pour 9,9 minutes
+d'avance moyenne. Six minutes de sommeil quotidiennes rendues, et sept minutes d'avance
+inutile en moins.
+
+### Les coefficients ont été balayés, pas choisis
+
+48 combinaisons de `MARGIN_FLOOR`, `VAR_WEIGHT`, `LATE_WEIGHT` et `PRIOR_SPREAD_RATIO`.
+Quatorze tenaient la cible. Le départage s'est fait **sur un principe, pas sur le meilleur
+chiffre** : deux combinaisons donnaient exactement le même résultat, l'une en divisant par
+deux le terme de retard chronique, l'autre en abaissant le plancher fixe. Retenue la seconde.
+Le terme de retard chronique est la seule part de la marge qui s'adapte à la personne plutôt
+qu'aux statistiques d'une étape, et ce produit existe pour les gens qu'il décrit. Ce qui a
+été rendu, ce sont deux minutes de plancher, la part qui ne dépendait de rien.
+
+### L'estimateur a été tranché par mesure, sur deux critères
+
+S4 laissait le choix ouvert entre médiane et moyenne tronquée. Quatre estimateurs mesurés,
+sur le coût en régime établi **et** sur la contamination après un matin aberrant, qui est la
+raison d'être de l'article.
+
+| estimateur | avance établie | contamination |
+|---|---|---|
+| moyenne + écart-type (avant J3) | 15,3 | **9,94 min** |
+| médiane + MAD | 15,8 | 3,47 |
+| **moyenne tronquée symétrique** | **14,3** | **3,59** |
+| moyenne tronquée haute seule | 12,5 | 3,44 |
+
+La troncature haute seule donne la plus petite avance, et elle a été écartée : ne retirer que
+la valeur haute biaise le centre vers le bas, ce qui est de l'optimisme et non de la
+robustesse (6 % de matins en retard contre 3 %). La médiane a été écartée aussi : sur un
+segment de deux points, MAD fois 1,4826 vaut 1,48 fois l'écart-type, donc elle surestimait la
+dispersion là où elle est le moins fiable.
+
+### Preuves au rouge
+
+| Régression posée | Tests qui virent au rouge |
+|---|---|
+| Article 1 annulé : on additionne de nouveau les écarts-types | les trois tests d'avance d'ADR-002 |
+| Article 2 annulé : `PRIOR_SPREAD_RATIO` à 0 | `predict` sans mesure, composition de `buildPlan`, trajet mesuré contre inconnu |
+| Article 3 annulé : moyenne simple | avance d'ADR-002, et le test de contamination |
+| Budget de code abaissé sous la mesure réelle | les deux tests de budget, avec les cinq plus gros fichiers nommés |
+
+### Un test de J2 a changé de seuil, et il faut dire pourquoi
+
+`le defaut existe : sans calibrage, un matin sur deux au moins est en retard au jour 1`
+passait à 71 % en J2. L'article 2 attaque le jour 1 par un autre chemin (la marge n'est plus
+minimale au moment de l'ignorance maximale), donc le défaut résiduel est tombé sous 50 %.
+Le seuil a suivi, à 30 %. **C'est un progrès qui fait bouger un seuil, pas un seuil relâché
+pour faire passer un test**, et la différence se voit à ceci : le test qui compare avec et
+sans calibrage, lui, n'a pas bougé d'un pouce.
+
+### Deux choses que le harnais consigne au lieu de les taire
+
+**Le parcours sans destination ne tient pas la cible d'avance** (11,6 min contre 9,9). Sans
+destination, le trajet n'est jamais mesuré : l'app reste ignorante à vie sur ce terme et le
+paie en marge, tous les matins. C'est le parcours par défaut du produit, puisque rien
+n'oblige à nommer un lieu. Un test le mesure et échouera si ça change, dans un sens comme
+dans l'autre.
+
+**L'article 4 de S4 n'est pas fait** (segmentation et mémoire). C'était déjà « le moins
+urgent des quatre » dans la spec, et sa contrainte de taille (allonger le FIFO fait grossir
+la clé `localStorage`) le rend indissociable d'un travail sur le stockage.
+
+### Ce que J3 retire (DEC-12)
+
+`varBoost`, comme prévu par S4 : il gonflait la composante variance d'une destination jamais
+mesurée, mais multipliait une variance nulle, donc ne faisait rien précisément dans le cas
+pour lequel il avait été écrit. Et `onFeedback`, qui n'était plus appelée par aucun code de
+production depuis B1 : seuls des tests la maintenaient en vie.
+
+### Le budget a bloqué le jalon, et c'est ce qui a produit ADR-005
+
+J3 s'est arrêté net sur `tests/budget.test.mjs`, à 656 octets au-dessus. Tout le code mort
+identifiable avait déjà été retiré et les commentaires resserrés deux fois. Le blocage a
+forcé une question jamais posée : **220 Ko de quoi, et pourquoi 220 ?** Le chiffre n'était
+instruit nulle part.
+
+`ADR-005` remplace un budget unique par deux, parce qu'il y a deux coûts distincts : le poids
+transféré, payé une fois au remplissage du cache, et le code hors commentaires, analysé à
+chaque démarrage à froid. Le second est le contraignant, à 185 Ko contre 173,5 mesurés. La
+vraie cible, First Paint sous une seconde sur iPhone 12, n'est toujours vérifiée par aucune
+machine et reste à mesurer à la main en J4.
+
+---
+
 ## Méthode
 
 Deux formes de preuve ont été utilisées, à valeur équivalente :

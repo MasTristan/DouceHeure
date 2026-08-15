@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { recordDurations, recordOutcome, onFeedback } from '../js/predict.js';
+import { recordDurations, recordOutcome } from '../js/predict.js';
 import {
   defaultState, startPendingSession, clearPendingSession, purgePendingSession,
   PENDING_SESSION_PURGE_MS,
@@ -116,15 +116,13 @@ test('B1 : recordOutcome ne touche jamais step.real, seulement history et latene
   assert.notEqual(state.latenessScore, 0.5);
 });
 
-test('B1 : onFeedback compose toujours les deux (compatibilite)', () => {
-  const state = freshState();
-  const profileId = state.activeProfileId;
-  const ctx = { day: 1, type: 'work', profileId };
-  onFeedback(state, 'late', [{ stepKey: 'wakeup', v: 7 }], ctx);
-
-  const profile = state.profiles.find((p) => p.id === profileId);
-  assert.equal(profile.steps.find((s) => s.key === 'wakeup').real.length, 1);
-  assert.equal(state.history.length, 1);
+// J3 (DEC-12) · onFeedback a ete retiree : elle ne composait que
+// recordDurations et recordOutcome, et plus aucun code de production ne
+// l'appelait depuis B1. Seuls des tests la maintenaient en vie.
+test('J3 : onFeedback n\'existe plus dans le moteur', async () => {
+  const mod = await import('../js/predict.js');
+  assert.equal('onFeedback' in mod, false,
+    'du code de production que seuls les tests appellent n\'est pas du code de production');
 });
 
 test('B1 : pendingSession vieux de plus de 8h est purge sans ecriture et sans message', () => {

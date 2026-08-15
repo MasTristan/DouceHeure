@@ -37,7 +37,12 @@ Ne pas rediscuter ni contourner sans validation explicite.
 - **Coût strictement nul.** Aucun serveur, aucune infrastructure, aucune dépendance payante, aucun backend, aucun service tiers. Les polices sont auto-hébergées : zéro requête tierce.
 - **Guidage app ouverte uniquement.** Sur iOS, une web app ne notifie pas de façon fiable quand elle est fermée. Le guidage et le réveil fonctionnent au premier plan seulement. Deux conséquences obligatoires : Wake Lock pendant la session et la nuit (mode chevet), et prévenir honnêtement l'utilisateur avant.
 - **Stack : HTML / CSS / JavaScript vanilla, zéro dépendance runtime, zéro bundler.** APIs navigateur uniquement : Wake Lock, Web Audio, Web Speech (speechSynthesis), Vibration, Web Share, File. Le `package.json` ne sert qu'aux tests node. Le Service Worker sert uniquement au cache hors-ligne, jamais aux notifications.
-- **Budgets** : JS total < 220 KB non minifié, canvas ambiant à 12 fps max, First Paint < 1 s sur iPhone 12.
+- **Budgets** (ADR-005) : deux budgets JS, pas un. **Code hors commentaires < 185 Ko**, c'est
+  le contraignant, analysé à chaque démarrage à froid. **Poids transféré < 260 Ko**, payé une
+  seule fois au remplissage du cache. Canvas ambiant à 12 fps max. La vraie cible reste
+  **First Paint < 1 s sur iPhone 12**, et elle n'est vérifiée par aucune machine : elle se
+  mesure à la main sur appareil réel, dans la recette. Tant que cette mesure n'a pas été
+  faite, personne ne sait si l'app tient sa cible de performance.
 
 ---
 

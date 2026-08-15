@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { migrate, capHistory, MAX_HISTORY } from '../js/store.js';
-import { onFeedback } from '../js/predict.js';
+import { recordDurations, recordOutcome } from '../js/predict.js';
 
 function stubQuotaExceededLocalStorage() {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -25,7 +25,8 @@ test('B5 : saveState() n\'echoue pas quand le stockage refuse d\'ecrire', async 
 test('B5 : history reste borne a MAX_HISTORY apres de nombreuses sessions', () => {
   const state = { history: [], profiles: [{ id: 'p', steps: [] }], activeProfileId: 'p', latenessScore: 0.5 };
   for (let i = 0; i < 500; i++) {
-    onFeedback(state, 'ontime', [], { day: 1, type: 'week', profileId: 'p' });
+    recordDurations(state, [], { day: 1, type: 'week', profileId: 'p' });
+    recordOutcome(state, 'ontime', { day: 1, type: 'week', profileId: 'p' });
   }
   assert.ok(state.history.length <= MAX_HISTORY, `history a ${state.history.length} entrees, plafond ${MAX_HISTORY}`);
 });

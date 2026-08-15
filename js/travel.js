@@ -22,13 +22,6 @@ export function getDestination(state, id) {
   return state.destinations?.find((d) => d.id === id) || null;
 }
 
-export function removeDestination(state, id) {
-  state.destinations = (state.destinations || []).filter((d) => d.id !== id);
-  for (const p of state.profiles || []) {
-    if (p.defaults?.destinationId === id) p.defaults.destinationId = null;
-  }
-}
-
 // "Je pars" : ouvre un trajet en attente, persisté dans l'état.
 export function startTrip(state, destinationId, transport, now = Date.now()) {
   state.pendingTrip = { leaveTs: now, destinationId: destinationId || null, transport };

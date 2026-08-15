@@ -266,10 +266,6 @@ export function getActiveProfile(state) {
   return state.profiles?.find((p) => p.id === state.activeProfileId) || null;
 }
 
-export function getActiveSteps(state) {
-  return getActiveProfile(state)?.steps || [];
-}
-
 // B7 · Persiste le transport et la destination choisis dans l'Aperçu, au
 // lancement de la session. Sans cela, confirmArrival() refuse d'écrire faute
 // de destination et la boucle d'apprentissage du trajet (F5) ne se ferme
