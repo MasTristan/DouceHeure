@@ -505,6 +505,99 @@ machine et reste à mesurer à la main en J4.
 
 ---
 
+## J4 · Le corps de l'app (S5), articles 1 à 5
+
+La recette sur appareil réel (article 6) n'est pas ici : elle demande un iPhone. Ce qui suit
+est ce qui pouvait être livré et vérifié avant elle.
+
+### Article 1 · Dynamic Type
+
+77 déclarations `font-size` en pixels converties en `rem`, l'échelle de `tokens.css` avec
+elles, et la racine branchée sur `font: -apple-system-body`. **Avant, le réglage « Taille du
+texte » d'iOS n'avait strictement aucun effet sur l'app.**
+
+`--base-scale` a disparu, et le mode lisible est requalifié : il change la fonte et coupe
+l'italique, il ne règle plus la taille. C'est ce que J4 retire (DEC-12), et c'est la
+meilleure sorte de suppression : elle retire une décision **et** rend le résultat meilleur
+pour ceux qui en ont le plus besoin.
+
+**Ce que ces tests ne disent pas**, et il faut le dire : ils sont structurels. Ils empêchent
+la réintroduction du défaut, ils ne disent rien de ce qui se passe à 310 % de taille de
+texte, où le risque réel est qu'une mise en page casse. Ça se voit sur un téléphone.
+
+### Article 2 · Contrastes
+
+**34 couleurs en dur dans `components.css`**, en violation de `CLAUDE.md` §7 depuis
+l'origine. Presque toutes portaient l'ambre de la scène Aube : en Plein jour, sur fond crème,
+les halos et teintes ne changeaient donc pas de scène. Remplacées par des tokens de
+composantes (`--amber-rgb`, `--green-rgb`, `--on-amber`, `--danger`), déclarés dans les
+quatre scènes.
+
+Le calcul WCAG a ensuite trouvé **deux échecs réels, exactement sur les deux éléments où la
+spec promet AAA depuis l'origine sans que rien ne le vérifie** : en scène Plein jour, le mot
+d'étape donnait 4,87:1 et le bouton de confirmation 5,18:1, pour une exigence de 7:1.
+
+L'ambre du Plein jour a été assombri de #8a6018 à #694912. La valeur n'a pas été devinée :
+la teinte est conservée exactement (mêmes proportions RVB) et la clarté a été balayée
+jusqu'au premier palier qui tient les deux couples, soit 7,16:1 et 7,62:1.
+
+La scène Nuit est **exemptée, et l'exemption est écrite dans le test**, avec la vérification
+inverse : rien n'y doit dépasser un contraste doux. Une exemption tacite est un bug, une
+exemption écrite est une décision.
+
+### Article 4 · Le mode chevet actionnable
+
+Le défaut le plus dur trouvé dans ce jalon, et il venait d'un correctif : J0 avait rendu
+l'écran de nuit actionnable en posant `role="button"` sur le `<main>` entier, nommé
+« Quitter le mode chevet ? ». **Effet de bord que personne n'avait vu : le contenu de l'écran
+cesse alors d'être lu comme du contenu.** Une personne aveugle en mode chevet ne pouvait donc
+savoir ni l'heure qu'il est, ni à quelle heure elle serait réveillée.
+
+L'écran expose maintenant son contenu, plus deux contrôles atteignables au clavier et au
+lecteur d'écran : la luminosité (`role="slider"`, flèches, valeur annoncée) et la sortie. Les
+gestes plein écran restent, parce que c'est la bonne ergonomie de nuit ; ils ne sont
+simplement plus la seule voie.
+
+**Une cause trouvée en chemin** : l'horloge affichée par le chevet lisait `new Date()`
+directement, hors de l'horloge injectable d'ADR-004. Elle n'était donc vérifiable par aucun
+test, et c'est la raison pour laquelle personne n'avait remarqué qu'elle n'était pas lue.
+
+### Article 5 · Les chaînes du geste
+
+L'état armé se voit depuis J1 ; il s'entend maintenant. Trois chaînes ajoutées, toutes dans
+`copy.js` : l'armement, l'appui relâché, et l'indice d'activation en deux temps, ce dernier
+porté par le bouton lui-même pour être disponible **avant** le premier essai.
+
+**Aucune annonce à la validation, volontairement.** L'appelant annonce déjà le nouvel état
+(`speakStep`). Deux annonces coup sur coup au moment où la personne enchaine seraient du
+bruit, et le bruit est précisément ce dont souffre le public visé.
+
+**Une chaîne de S2 §7 n'a pas été écrite, et ce n'est pas un oubli.** « Annulation en mode
+tap » nomme une fenêtre d'annulation qui n'existe pas : en mode tap, `confirm-control.js`
+confirme au premier clic. L'introduire changerait la sémantique de R2 et contredirait la
+promesse du mode tap (« un tap suffit, plus direct »). Ça se décide, ça ne s'ajoute pas en
+passant.
+
+### Preuves au rouge
+
+| Régression posée | Tests qui virent au rouge |
+|---|---|
+| Annonces du geste retirées | armement annoncé, appui interrompu annoncé |
+| Ambre du Plein jour remis à sa valeur d'avant J4 | les deux couples AAA de la scène Plein jour |
+| Une `font-size` en pixels réintroduite | aucune taille en pixels dans `css/` |
+
+### Deux tests de jalons précédents ont changé de cible
+
+`night/view.js expose un element focusable et nomme` (J0) exigeait `role="button"` sur le
+`<main>` du chevet. C'est ce que l'article 4 retire. La cible est maintenant plus exigeante :
+le `<main>` ne doit **pas** se déclarer bouton, et deux contrôles nommés doivent exister.
+
+Le second est le test de contraste lui-même : il n'existait pas, et la spec v2 annonçait AA
+et AAA depuis l'origine. Ce n'est pas un test qui change de cible, c'est une promesse qui
+cesse d'être sur parole.
+
+---
+
 ## Méthode
 
 Deux formes de preuve ont été utilisées, à valeur équivalente :

@@ -16,7 +16,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { installTinyDom, byClass } from './tiny-dom.mjs';
+import { installTinyDom, byClass, findWhere } from './tiny-dom.mjs';
+import { UI } from '../js/copy.js';
 import { installFakeClock, resetClock } from '../js/clock.js';
 import { defaultState } from '../js/store.js';
 import { resetLiveForTests } from '../js/live/controller.js';
@@ -196,4 +197,48 @@ test('S2 §5 · quitter le live puis en relancer un remonte un ecran neuf', () =
   const secondBtn = holdBtn(dom);
   assert.ok(secondBtn, 'la nouvelle session doit monter un ecran live');
   assert.notEqual(secondBtn, firstBtn, 'le montage de la session precedente a ete reutilise');
+});
+
+// ─── J4 (S5 article 5) · Le geste s'entend ────────────────────────
+
+const liveRegion = (dom) => findWhere(dom.document.body, (n) => n.getAttribute?.('id') === 'live-region');
+
+test('S5 §6 · l\'etat arme est annonce, pas seulement affiche', () => {
+  const dom = installTinyDom();
+  installFakeClock(Date.parse('2026-08-05T07:00:00'));
+  const state = seed(dom);
+  reachLive(dom, state);
+
+  const btn = holdBtn(dom);
+  dom.fireEvent(btn, 'click'); // premiere activation atomique : arme
+
+  assert.ok(btn.classList.contains('is-armed'), 'l\'etat arme doit se voir');
+  assert.equal(liveRegion(dom)?.textContent, UI.gesture_armed,
+    'sans annonce, une personne sous VoiceOver active, n\'obtient rien, et ne sait pas que l\'app attend');
+});
+
+test('S5 §6 · un appui interrompu se dit, il ne se devine pas', () => {
+  const dom = installTinyDom();
+  const fake = installFakeClock(Date.parse('2026-08-05T07:00:00'));
+  const state = seed(dom);
+  reachLive(dom, state);
+
+  const btn = holdBtn(dom);
+  const before = stepLabel(dom);
+  dom.fireEvent(btn, 'pointerdown');
+  fake.tick(200); // relache bien avant les 600 ms
+  dom.fireEvent(btn, 'pointerup');
+
+  assert.equal(stepLabel(dom), before, 'un appui interrompu n\'avance rien (R2)');
+  assert.equal(liveRegion(dom)?.textContent, UI.gesture_released,
+    'sans cette annonce, on ne distingue pas "j\'ai relache trop tot" de "l\'app ne repond pas"');
+});
+
+test('S5 §6 · le bouton porte l\'indice d\'activation en deux temps', () => {
+  const dom = installTinyDom();
+  installFakeClock(Date.parse('2026-08-05T07:00:00'));
+  const state = seed(dom);
+  reachLive(dom, state);
+  assert.equal(holdBtn(dom).getAttribute('aria-description'), UI.gesture_assist_hint,
+    'l\'indice doit etre disponible AVANT le premier essai, pas apres coup');
 });

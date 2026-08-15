@@ -12,6 +12,18 @@ html {
   background: var(--bg);
   height: 100%;
   transition: background-color var(--dur-crawl) linear;
+
+  /* S5 article 1 · Dynamic Type. Sur iOS, `-apple-system-body` porte la
+     taille choisie dans Réglages > Affichage > Taille du texte (et dans
+     les réglages d'accessibilité, jusqu'à 310 %). La racine la prend, et
+     toute l'échelle en rem la suit.
+     Ailleurs, la déclaration est ignorée et la racine garde la taille de
+     police par défaut du navigateur, que l'utilisateur peut aussi avoir
+     réglée : le comportement est correct dans les deux cas.
+     `-apple-system-body` impose aussi une famille : elle est reprise
+     juste après, sinon toute l'app perdrait ses polices. */
+  font: -apple-system-body;
+  font-family: var(--font-body);
 }
 
 body {
@@ -20,7 +32,7 @@ body {
   background: var(--bg-grad);
   color: var(--text);
   font-family: var(--font-body);
-  font-size: calc(16px * var(--base-scale));
+  font-size: 1rem;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -120,7 +132,7 @@ body {
 .wordmark__name {
   font-family: var(--font-display);
   font-style: italic;
-  font-size: calc(15px * var(--base-scale));
+  font-size: 0.9375rem;
   font-weight: 400;
   color: var(--text-mid);
   letter-spacing: 0.02em;
@@ -142,7 +154,7 @@ body {
   font-family: var(--font-display);
   font-style: italic;
   font-weight: 400;
-  font-size: clamp(30px, 8vw, 38px);
+  font-size: clamp(1.875rem, 8vw, 2.375rem);
   line-height: 1.18;
   color: var(--text);
   letter-spacing: -0.01em;
@@ -187,7 +199,7 @@ body {
 .t-label {
   font-family: var(--font-body);
   font-weight: 600;
-  font-size: calc(11px * var(--base-scale));
+  font-size: 0.6875rem;
   line-height: 1.2;
   letter-spacing: 0.13em;
   text-transform: uppercase;

@@ -15,10 +15,19 @@ import * as scene from '../scene.js';
 import { nav } from '../ui/nav.js';
 import { nightNav, registerNight } from './registry.js';
 
+// Voile maximal, et pas de la luminosité : au-delà, l'écran est noir et
+// l'heure n'est plus lisible du tout.
+const MAX_VEIL = 0.92;
+const VEIL_STEP = 0.08;
+
 export function renderNight() {
   const night = nightNav.getNight();
   if (!night) return;
-  const d = new Date();
+  // ADR-004 · L'horloge affichée passe par l'horloge injectable, comme
+  // tout le reste des chemins du chevet. Sans ça, elle n'est vérifiable
+  // par aucun test : c'est la seule raison pour laquelle personne n'avait
+  // remarqué qu'elle n'était pas lue par les lecteurs d'écran.
+  const d = new Date(clock.now());
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
   const shift = night.clockShift - 1;
@@ -42,11 +51,62 @@ export function renderNight() {
     now: clock.now, setTimeoutFn: clock.setTimeout, clearTimeoutFn: clock.clearTimeout,
   });
 
+  // S5 article 4 · L'écran de nuit expose son contenu comme du CONTENU.
+  // Avant J4, tout le <main> était un role="button" nommé « Quitter le
+  // mode chevet ? » : une personne aveugle en mode chevet ne pouvait donc
+  // savoir ni l'heure qu'il est, ni à quelle heure elle serait réveillée.
+  // Les gestes plein écran restent (c'est la bonne ergonomie de nuit :
+  // toucher n'importe où), ils ne sont simplement plus la seule voie.
+  const veilEl = el('div', { class: 'night-veil', style: `background: rgba(0,0,0,${night.veil.toFixed(2)})` });
+
+  function setVeil(v) {
+    night.veil = Math.min(MAX_VEIL, Math.max(0, v));
+    veilEl.style.background = `rgba(0,0,0,${night.veil.toFixed(2)})`;
+    brightness.setAttribute('aria-valuenow', String(brightnessPercent()));
+  }
+  // 100 = le plus lumineux (aucun voile). L'utilisateur règle une
+  // luminosité, pas un voile : le sens du contrôle suit ce qu'il perçoit.
+  const brightnessPercent = () => Math.round((1 - night.veil / MAX_VEIL) * 100);
+
+  // Contrôle focusable et actionnable au clavier, en plus du glissement.
+  const brightness = el('div', {
+    class: 'night-control',
+    role: 'slider',
+    tabindex: '0',
+    'aria-label': UI.bedside_brightness,
+    'aria-valuemin': '0',
+    'aria-valuemax': '100',
+    'aria-valuenow': String(Math.round((1 - night.veil / MAX_VEIL) * 100)),
+    onkeydown: (e) => {
+      const step = { ArrowUp: -1, ArrowRight: -1, ArrowDown: 1, ArrowLeft: 1 }[e.key];
+      if (step === undefined) return;
+      e.preventDefault();
+      e.stopPropagation?.();
+      setVeil(night.veil + step * VEIL_STEP);
+    },
+    onpointerdown: (e) => e.stopPropagation?.(),
+    onclick: (e) => e.stopPropagation?.(),
+  }, [
+    el('span', { class: 'night-control__label' }, UI.bedside_brightness),
+    el('span', { class: 'night-control__hint t-meta' }, UI.bedside_brightness_hint),
+  ]);
+
+  const quitBtn = el('button', {
+    class: 'night-control night-control--quit',
+    onpointerdown: (e) => e.stopPropagation?.(),
+    onclick: async (e) => {
+      e.stopPropagation?.();
+      const ok = await askConfirm({
+        title: UI.bedside_quit_confirm,
+        confirmLabel: UI.bedside_quit_yes,
+        cancelLabel: UI.bedside_quit_no,
+      });
+      if (ok) nightNav.stopNight(true);
+    },
+  }, UI.bedside_quit_action);
+
   const screen = el('main', {
     class: 'screen screen--night',
-    role: 'button',
-    tabindex: '0',
-    'aria-label': UI.bedside_quit_confirm,
     onpointerdown: (e) => {
       // Appui tenu 1 s : quitter (avec confirmation). Tap : rien.
       night.swipeStart = e.clientY;
@@ -57,10 +117,8 @@ export function renderNight() {
       if (night.swipeStart == null) return;
       const delta = e.clientY - night.swipeStart;
       if (Math.abs(delta) > 12) quitControl.reset();
-      // Swipe vertical : luminosité via le voile.
-      night.veil = Math.min(0.92, Math.max(0, night.veilStart + delta / 400));
-      const veilEl = document.querySelector('.night-veil');
-      if (veilEl) veilEl.style.background = `rgba(0,0,0,${night.veil.toFixed(2)})`;
+      // Glissement vertical : luminosité via le voile.
+      setVeil(night.veilStart + delta / 400);
     },
     onpointerup: () => {
       night.swipeStart = null;
@@ -80,13 +138,18 @@ export function renderNight() {
     el('div', { style: 'flex:1' }),
     el('div', {
       class: 'night-clock',
+      role: 'text',
+      'aria-label': UI.bedside_now(`${hh}:${mm}`),
       style: `transform: translate(${shift}px, ${shift}px)`,
     }, `${hh}:${mm}`),
     el('div', { class: 'spacer-sm' }),
     el('div', { class: 'night-wake-time t-meta' }, `${UI.bedside_wake_label} ${night.bedside.wakeTime}`),
     el('div', { style: 'flex:1' }),
+    brightness,
+    el('div', { class: 'spacer-sm' }),
+    quitBtn,
     el('div', { class: 'night-hint t-meta' }, UI.bedside_night_hint),
-    el('div', { class: 'night-veil', style: `background: rgba(0,0,0,${night.veil.toFixed(2)})` }),
+    veilEl,
   ]);
   render(screen, null);
   setScreen('night');
@@ -136,7 +199,10 @@ export function renderWakeProposal() {
   }, [
     el('div', { style: 'flex:1' }),
     el('div', { class: 'night-clock night-clock--waking' },
-      `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`),
+      (() => {
+        const w = new Date(clock.now());
+        return `${String(w.getHours()).padStart(2, '0')}:${String(w.getMinutes()).padStart(2, '0')}`;
+      })()),
     el('div', { style: 'flex:1' }),
     el('div', { class: 'night-hint t-meta' }, UI.bedside_wake_hold),
   ]);
