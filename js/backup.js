@@ -24,6 +24,11 @@ function sanitizeStep(s) {
     icon: str(s.icon, 'star'),
     emoji: typeof s.emoji === 'string' ? s.emoji : null,
     est: Math.max(1, num(s.est, 5)),
+    // J2 : l'estimation de référence, base du calibrage. Sans elle, un
+    // recalibrage après restauration s'empilerait sur un `est` déjà
+    // calibré et le plan dériverait. Absente d'une sauvegarde d'avant J2 :
+    // `est` fait alors office de référence, ce qui est exact.
+    ...(typeof s.estBase === 'number' ? { estBase: Math.max(1, s.estBase) } : {}),
     active: bool(s.active, true),
     fixed: bool(s.fixed, false),
     kind: s.kind === 'core' ? 'core' : 'comfort',
@@ -47,6 +52,9 @@ function sanitizeProfile(p) {
       arrival: typeof p.defaults?.arrival === 'string' ? p.defaults.arrival : null,
       transport: str(p.defaults?.transport, 'walk'),
       destinationId: typeof p.defaults?.destinationId === 'string' ? p.defaults.destinationId : null,
+      // J2 : sans ce champ, restaurer une sauvegarde perdrait le calibrage
+      // et renverrait la personne au comportement d'avant J2.
+      wakeTime: typeof p.defaults?.wakeTime === 'string' ? p.defaults.wakeTime : null,
     },
   };
 }

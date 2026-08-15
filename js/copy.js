@@ -166,6 +166,12 @@ export const UI = {
 
   wordmark: 'Douce heure',
 
+  // Feuille de confirmation (DEC-03) · remplace les dialogues natifs du
+  // navigateur. Le libellé de validation est toujours propre à la question
+  // posée ("Quitter", "Remplacer", "Supprimer") : jamais un "OK" qui oblige
+  // à relire le titre pour savoir ce qu'on valide.
+  sheet_cancel: 'Annuler',
+
   // Onboarding (spec v2 §15)
   ob1_headline: 'Douce heure ne te presse pas.',
   ob1_subline: 'Elle marche à ton rythme, et apprend le tien.',
@@ -173,6 +179,12 @@ export const UI = {
   ob1_cta: 'Continuer',
   ob2_title: 'Ton premier départ',
   ob2_body: 'Choisis un point de départ. Tout se modifie après.',
+  // J2 (S3 §2) · On ne demande plus jamais une durée. On demande deux
+  // heures d'horloge que la personne connait : son lever habituel et son
+  // arrivée. Une heure cible est autorisée par R1, une durée demandée à
+  // quelqu'un qui ne sait pas l'évaluer ne l'est pas.
+  ob2_wake_label: 'À quelle heure tu te lèves, en général ?',
+  ob2_wake_help: "Pas l'heure idéale : celle de tes vrais matins.",
   ob2_arrival_label: 'Arrivée à',
   ob2_transport_label: 'Transport',
   ob2_cta: 'Continuer',
@@ -217,11 +229,17 @@ export const UI = {
   preview_destination_none: 'Sans destination',
   preview_destination_add: '+ Nouvelle destination',
   preview_destination_prompt: 'Un nom pour cette destination ?',
+  preview_destination_placeholder: 'Le bureau, la crèche, chez Sam',
+  preview_destination_save: 'Ajouter',
   preview_sequence_label: 'Le déroulé',
   preview_wakelock_notice: "L'écran restera allumé pendant le guidage. Pose le téléphone où tu le vois.",
   preview_cta: "C'est parti",
   preview_back: 'Retour',
   preview_learned: 'Calé sur tes vraies durées.',
+  // Le budget déclaré est plus court que le déroulé : le plan n'est pas
+  // comprimé et on le dit. Surface autorisée (ADR-003, l'Aperçu). Énonce
+  // un fait sur le plan, jamais sur la prudence de l'app (R4).
+  preview_budget_floor: "Ce déroulé demande un peu plus de temps que celui que tu m'as donné.",
 
   // Live
   live_current_label: 'En ce moment',
@@ -321,11 +339,16 @@ export const UI = {
   studio_checklist_add: '+ Ajouter un objet',
   studio_checklist_placeholder: "Nom de l'objet",
   studio_defaults_label: 'Par défaut',
+  studio_default_wake: 'Lever habituel',
+  studio_default_wake_help: "Je cale le déroulé dessus. Tu n'as aucune durée à régler.",
   studio_default_arrival: 'Arrivée habituelle',
   studio_default_transport: 'Transport habituel',
   studio_default_destination: 'Destination habituelle',
   studio_preview: 'Aperçu du plan',
   studio_delete_profile: 'Supprimer ce départ',
+  studio_delete_confirm: 'Supprimer ce départ ?',
+  studio_delete_yes: 'Supprimer',
+  studio_delete_no: 'Garder',
   studio_back: 'Retour',
 
   // Réglages
@@ -353,6 +376,8 @@ export const UI = {
   settings_export: 'Exporter mes données',
   settings_import: 'Importer des données',
   settings_import_confirm: 'Remplacer toutes les données actuelles ?',
+  settings_import_body: 'Tes départs, tes destinations et ce que j\'ai appris seront remplacés par le fichier.',
+  settings_import_yes: 'Remplacer',
   settings_import_ok: 'Données importées.',
   settings_import_bad: 'Fichier non reconnu. Rien n\'a été modifié.',
   settings_shortcuts_title: 'Automatiser avec Raccourcis iOS',

@@ -2,7 +2,7 @@
 // Cache versionné explicite (spec v2 §17) : app 100 % offline après
 // premier chargement, polices auto-hébergées comprises.
 
-const VERSION = 'v2.3.1'; // correctif : direction de flex manquante sur .studio-step
+const VERSION = 'v2.6.0'; // J3 : le moteur merite son nom (variances composees, a priori, estimateur robuste)
 const CACHE = `douce-heure-${VERSION}`;
 
 const ASSETS = [
@@ -18,6 +18,7 @@ const ASSETS = [
   './js/time.js',
   './js/predict.js',
   './js/plan.js',
+  './js/calibrate.js',
   './js/travel.js',
   './js/bedside.js',
   './js/backup.js',
@@ -36,6 +37,7 @@ const ASSETS = [
   './js/copy.js',
   './js/social.js',
   './js/ui/dom.js',
+  './js/ui/sheet.js',
   './js/ui/shell.js',
   './js/ui/nav.js',
   './js/ui/gesture.js',

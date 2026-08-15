@@ -77,7 +77,7 @@ export function makeProfileFromArchetype(arch, id) {
     icon: arch.icon,
     steps,
     checklist: makeChecklist(arch.checklist),
-    defaults: { arrival: null, transport: 'walk', destinationId: null },
+    defaults: { arrival: null, transport: 'walk', destinationId: null, wakeTime: null },
   };
 }
 
@@ -166,10 +166,12 @@ function migrateProfile(old, routine) {
     checklist: Array.isArray(old.checklist) && old.checklist.length
       ? old.checklist.map((c) => ({ id: c.id, label: c.label, done: false }))
       : makeChecklist(DEFAULT_CHECKLIST.map((c) => c.label)),
-    defaults: old.defaults || {
+    defaults: {
       arrival: routine?.arrival || null,
       transport: routine?.transport || 'walk',
       destinationId: null,
+      wakeTime: null,
+      ...(old.defaults || {}),
     },
   };
 }
@@ -190,6 +192,12 @@ export function migrate(state) {
     state.pendingTrip = state.pendingTrip || null;
     state.pendingSession = state.pendingSession || null;
     if (!state.profiles?.length) state.profiles = defaultState().profiles;
+    // J2 (S3 §2) : l'heure de lever habituelle, base du calibrage. Absente
+    // des états v2 antérieurs, comblée à null (le profil garde alors les
+    // estimations de son archétype, comportement d'avant J2).
+    for (const p of state.profiles) {
+      p.defaults = { arrival: null, transport: 'walk', destinationId: null, wakeTime: null, ...(p.defaults || {}) };
+    }
     if (!state.profiles.find((p) => p.id === state.activeProfileId)) {
       state.activeProfileId = state.profiles[0].id;
     }
@@ -256,10 +264,6 @@ export function saveState(state) {
 
 export function getActiveProfile(state) {
   return state.profiles?.find((p) => p.id === state.activeProfileId) || null;
-}
-
-export function getActiveSteps(state) {
-  return getActiveProfile(state)?.steps || [];
 }
 
 // B7 · Persiste le transport et la destination choisis dans l'Aperçu, au

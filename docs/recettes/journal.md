@@ -268,6 +268,243 @@ et `README.md` mis à jour pour refléter l'arborescence finale (`ui/`, `live/`,
 
 ---
 
+## J1 étape 8 · La feuille remplace les dialogues natifs (DEC-03)
+
+Cinq sites d'appel supprimés, pas quatre : le compte de la vision datait d'avant J0. Sortie
+du mode chevet (`night/view.js`), import de sauvegarde (`screens/settings.js`), suppression
+d'un départ et création de destination (`studio.js`, deux sites), création de destination
+depuis l'Aperçu (`screens/preview.js`).
+
+| Test | Preuve au rouge |
+|---|---|
+| S2 §8 · aucun dialogue natif dans `js/` (`tests/sheet.test.mjs`) | `confirm(UI.settings_import_confirm)` réintroduit dans `screens/settings.js` : le test échoue en nommant le fichier et l'appel |
+| Restauration du focus | La ligne `previousFocus.focus()` retirée de `ui/sheet.js` : le test « le focus revient d'où il vient » échoue |
+| Échap vaut renoncement | Branche `if (e.key === 'Escape')` neutralisée : le test échoue, et huit autres restent en suspens (la promesse ne se résout plus jamais), ce qui est exactement le symptôme qu'un utilisateur subirait |
+
+**Ce que le test structurel protège vraiment.** Ce n'est pas une règle de style. Un
+`confirm()` est bloquant et non simulable : il rend une zone du produit inatteignable par la
+qualité, et les cinq se trouvaient sur les deux chemins les plus destructeurs de l'app,
+perdre sa nuit et perdre ses données. Le test interdit mécaniquement leur retour.
+
+**Deux décisions d'ergonomie prises dans ce composant**, toutes deux vérifiées par un test.
+Le focus part sur le renoncement et jamais sur l'action destructrice. Valider une saisie
+vide ne ferme pas la feuille : une saisie vide n'est pas une réponse, et fermer sur ce geste
+transformerait une hésitation en renoncement.
+
+**Correction annexe (S2 §4).** `prefers-reduced-motion` écrasait le remplissage de l'appui
+tenu à 150 ms alors que le geste dure 600 ms : la jauge atteignait le bout, puis il fallait
+continuer d'appuyer sans aucun retour. Le remplissage garde désormais la durée réelle du
+geste ; c'est le ressort d'annulation, purement décoratif, qui est retiré sous réduction de
+mouvement. L'état armé du chemin assistif (`is-armed`), jusqu'ici posé côté JS sans style,
+est maintenant visible.
+
+**Un test existant a changé de cible, volontairement.** `tests/confirm-control-wiring.test.mjs`
+verrouillait *exactement un* `confirm()` dans `renderNight` (garde de J0 contre l'ajout d'un
+second, sans interdire la suppression du premier). Sa cible est maintenant zéro, plus
+l'exigence positive que la sortie du chevet passe bien par `askConfirm`.
+
+---
+
+## J1 étape 9 · Le live cesse de se reconstruire (S2 §5)
+
+L'écran live construit son arbre une fois par session et n'écrit ensuite que les quelques
+nœuds qui changent. Le bouton de confirmation n'est jamais remplacé.
+
+**Ces tests portent sur l'identité des nœuds, pas sur leur contenu.** C'est l'identité qui
+porte le focus, l'armement du geste et la sélection de l'utilisateur. Un test de contenu
+serait passé au vert sur le code fautif : le contenu était correct, c'est le nœud qui
+disparaissait.
+
+Trois régressions distinctes ont été posées, parce qu'une seule ne suffisait pas à éprouver
+les sept tests. C'est le point utile de ce jalon : la première preuve a montré que quatre
+tests sur sept ne voyaient pas la régression qu'ils étaient censés voir.
+
+| Régression posée | Tests qui virent au rouge |
+|---|---|
+| **A.** `canReuse()` renvoie toujours `false` : reconstruction complète à chaque battement, comportement littéral d'avant | 1 (bouton remplacé), 2 (focus perdu), 3 (armement perdu), 6 (libellé remplacé) |
+| **B.** les deux messages retirés au sort à chaque rendu (défaut relevé par Camille) | 4 (message d'étape), 5 (message de suggestion) |
+| **C.** `canReuse()` ne vérifie plus à quelle session appartient le montage | 2, 3, 4, 6, 7 (montage mort réutilisé par la session suivante) |
+
+**Le harnais mentait, et il a fallu le corriger avant de valider un test.** À la première
+preuve, le test « le focus survit au ticker » restait vert sous la régression A.
+`tests/tiny-dom.mjs` gardait `activeElement` pointé sur un nœud détaché de la page, ce
+qu'aucun navigateur ne fait. Le harnais rendait donc indétectable exactement le défaut que
+S2 §5 corrige. `dropFocusWithin()` a été ajouté à `removeChild` et `replaceChildren` : le
+focus tombe avec l'élément qui le portait. Le test vire au rouge depuis.
+
+**Effet de bord attendu, obtenu** (Camille, S2 §5). `pick('suggested')` était retiré au sort
+à chaque rendu et son pool compte deux entrées : les deux phrases alternaient strictement
+toutes les 5 secondes sous les yeux de l'utilisateur. Le message d'une étape est maintenant
+tiré une fois et ne bouge plus.
+
+**Ce qui reste dû à J4** sur ce composant : les chaînes prononcées à l'armement (S2 §7,
+propriété de Camille), et la conception définitive de la feuille (S2 §3.1, Iris). L'état
+armé a maintenant un style visible (`is-armed`) et le remplissage de l'appui tenu garde sa
+durée réelle sous `prefers-reduced-motion`.
+
+---
+
+## J2 · La première semaine (S3)
+
+### Le simulateur d'abord, la correction ensuite
+
+`tests/tools/simulate.mjs` a été écrit **avant** toute modification du produit. Les chiffres
+de la réunion d'ouverture (« un matin sur deux en retard au jour 1 ») vivaient dans un compte
+rendu et personne ne pouvait les recalculer : le générateur n'avait jamais été versionné.
+
+**Les chiffres de ce simulateur ne sont pas ceux de R1, et il faut le dire.** R1 annonçait
+50 % de matins en retard au jour 1 ; cette re-dérivation en trouve 71 %. Ce n'est pas la même
+expérience, c'est une reconstruction du même raisonnement. La conclusion qualitative est
+identique et plus dure. Ce que le simulateur assume est écrit en tête du fichier, notamment
+l'hypothèse la plus favorable de toutes : l'utilisateur simulé se lève à l'heure proposée.
+
+### Ce que le calibrage change, mesuré
+
+Population de 300 utilisateurs, 20 matins, biais de déclaration 1,4, battement de 5 minutes.
+
+| | jour 1 | jour 2 | jour 3 | régime établi | avance établie |
+|---|---|---|---|---|---|
+| avant | 71 % en retard | 58 % | 21 % | 1 % | 17,3 min |
+| après | **4 %** | 4 % | 1 % | 1 % | 17,3 min |
+
+Le régime établi ne bouge pas d'un pouce, et c'est le résultat le plus important après le
+premier : le calibrage agit sur la fenêtre où l'app ne sait rien, puis s'efface dès que les
+mesures réelles pèsent dans la prédiction. Un test le vérifie explicitement, pour qu'une
+version future du calibrage ne puisse pas fuiter au-delà de sa fenêtre.
+
+Le coût est le lever : 105 minutes avant l'arrivée au jour 1 contre 83 avant. Ce n'est pas
+une aggravation, c'est le respect de ce que la personne a déclaré : elle se lève déjà à cette
+heure-là. L'app cesse simplement de lui promettre qu'elle peut se lever plus tard.
+
+Robustesse vérifiée sur trois biais de déclaration (1,0 / 1,4 / 1,8). Au pire cas, une
+personne qui met presque le double de ce qu'elle croit, le jour 1 passe de 98 % à 8 %.
+
+### Preuves au rouge
+
+| Régression posée | Tests qui virent au rouge |
+|---|---|
+| Le calibrage descend aussi vers le bas (compression du plan) | « jamais vers le bas », « un budget plus court ne comprime pas le plan » |
+| `estBase` ignoré, la référence devient le résultat précédent | idempotence, « changer d'heure de lever recalibre depuis la référence », `baseEst` |
+| L'onboarding ne calibre plus | « l'onboarding calibre réellement le déroulé » |
+| Calibrage neutralisé (échelle figée à 1) | 3 des 6 tests du harnais de calibration, dont celui du jour 1 |
+
+Le dernier compte double : il prouve que le harnais voit un calibrage cassé, pas seulement un
+calibrage absent.
+
+### Le budget de performance était un souhait, il redevient une contrainte
+
+`CLAUDE.md` §3 fixe « JS total < 220 Ko non minifié » depuis l'origine. **Rien ne le
+vérifiait.** J2 l'a dépassé de 901 octets sans que quoi que ce soit ne le signale, ce qui est
+exactement la façon dont une contrainte d'architecture meurt.
+
+`tests/budget.test.mjs` la rend mécanique. Le dépassement a été résorbé en factorisant deux
+duplications réelles (le coeur commun de `predict` et `predictTravel`, le calcul du budget
+écrit deux fois dans `calibrate.js`) et en ramenant les commentaires de `calibrate.js` à la
+densité du reste du dépôt : ils y occupaient 56 % du fichier, contre 15 à 20 % ailleurs.
+
+**Il reste 396 octets.** Ce n'est pas une marge, c'est un signal : J3 devra retirer quelque
+chose avant d'ajouter, et le décider explicitement.
+
+---
+
+## J3 · Le moteur (S4)
+
+### Ce que chaque article rapporte, mesuré séparément
+
+Population de 300 utilisateurs calibrés, 20 matins, avec destination (donc trajet appris).
+
+| | retard établi | avance | lever avant l'arrivée | marge |
+|---|---|---|---|---|
+| avant J3 | 2 % | 17,3 min | 110 min | 11,6 |
+| + article 1 (variances composées) | 2 % | 14,8 | 108 | 9,5 |
+| + articles 2 et 3 | 4 % | 12,4 | 107 | 8,1 |
+| + coefficients calibrés | **8 %** | **9,9** | **104** | **5,5** |
+
+**La cible d'ADR-002 est tenue** : 92 % de matins à l'heure ou en avance, pour 9,9 minutes
+d'avance moyenne. Six minutes de sommeil quotidiennes rendues, et sept minutes d'avance
+inutile en moins.
+
+### Les coefficients ont été balayés, pas choisis
+
+48 combinaisons de `MARGIN_FLOOR`, `VAR_WEIGHT`, `LATE_WEIGHT` et `PRIOR_SPREAD_RATIO`.
+Quatorze tenaient la cible. Le départage s'est fait **sur un principe, pas sur le meilleur
+chiffre** : deux combinaisons donnaient exactement le même résultat, l'une en divisant par
+deux le terme de retard chronique, l'autre en abaissant le plancher fixe. Retenue la seconde.
+Le terme de retard chronique est la seule part de la marge qui s'adapte à la personne plutôt
+qu'aux statistiques d'une étape, et ce produit existe pour les gens qu'il décrit. Ce qui a
+été rendu, ce sont deux minutes de plancher, la part qui ne dépendait de rien.
+
+### L'estimateur a été tranché par mesure, sur deux critères
+
+S4 laissait le choix ouvert entre médiane et moyenne tronquée. Quatre estimateurs mesurés,
+sur le coût en régime établi **et** sur la contamination après un matin aberrant, qui est la
+raison d'être de l'article.
+
+| estimateur | avance établie | contamination |
+|---|---|---|
+| moyenne + écart-type (avant J3) | 15,3 | **9,94 min** |
+| médiane + MAD | 15,8 | 3,47 |
+| **moyenne tronquée symétrique** | **14,3** | **3,59** |
+| moyenne tronquée haute seule | 12,5 | 3,44 |
+
+La troncature haute seule donne la plus petite avance, et elle a été écartée : ne retirer que
+la valeur haute biaise le centre vers le bas, ce qui est de l'optimisme et non de la
+robustesse (6 % de matins en retard contre 3 %). La médiane a été écartée aussi : sur un
+segment de deux points, MAD fois 1,4826 vaut 1,48 fois l'écart-type, donc elle surestimait la
+dispersion là où elle est le moins fiable.
+
+### Preuves au rouge
+
+| Régression posée | Tests qui virent au rouge |
+|---|---|
+| Article 1 annulé : on additionne de nouveau les écarts-types | les trois tests d'avance d'ADR-002 |
+| Article 2 annulé : `PRIOR_SPREAD_RATIO` à 0 | `predict` sans mesure, composition de `buildPlan`, trajet mesuré contre inconnu |
+| Article 3 annulé : moyenne simple | avance d'ADR-002, et le test de contamination |
+| Budget de code abaissé sous la mesure réelle | les deux tests de budget, avec les cinq plus gros fichiers nommés |
+
+### Un test de J2 a changé de seuil, et il faut dire pourquoi
+
+`le defaut existe : sans calibrage, un matin sur deux au moins est en retard au jour 1`
+passait à 71 % en J2. L'article 2 attaque le jour 1 par un autre chemin (la marge n'est plus
+minimale au moment de l'ignorance maximale), donc le défaut résiduel est tombé sous 50 %.
+Le seuil a suivi, à 30 %. **C'est un progrès qui fait bouger un seuil, pas un seuil relâché
+pour faire passer un test**, et la différence se voit à ceci : le test qui compare avec et
+sans calibrage, lui, n'a pas bougé d'un pouce.
+
+### Deux choses que le harnais consigne au lieu de les taire
+
+**Le parcours sans destination ne tient pas la cible d'avance** (11,6 min contre 9,9). Sans
+destination, le trajet n'est jamais mesuré : l'app reste ignorante à vie sur ce terme et le
+paie en marge, tous les matins. C'est le parcours par défaut du produit, puisque rien
+n'oblige à nommer un lieu. Un test le mesure et échouera si ça change, dans un sens comme
+dans l'autre.
+
+**L'article 4 de S4 n'est pas fait** (segmentation et mémoire). C'était déjà « le moins
+urgent des quatre » dans la spec, et sa contrainte de taille (allonger le FIFO fait grossir
+la clé `localStorage`) le rend indissociable d'un travail sur le stockage.
+
+### Ce que J3 retire (DEC-12)
+
+`varBoost`, comme prévu par S4 : il gonflait la composante variance d'une destination jamais
+mesurée, mais multipliait une variance nulle, donc ne faisait rien précisément dans le cas
+pour lequel il avait été écrit. Et `onFeedback`, qui n'était plus appelée par aucun code de
+production depuis B1 : seuls des tests la maintenaient en vie.
+
+### Le budget a bloqué le jalon, et c'est ce qui a produit ADR-005
+
+J3 s'est arrêté net sur `tests/budget.test.mjs`, à 656 octets au-dessus. Tout le code mort
+identifiable avait déjà été retiré et les commentaires resserrés deux fois. Le blocage a
+forcé une question jamais posée : **220 Ko de quoi, et pourquoi 220 ?** Le chiffre n'était
+instruit nulle part.
+
+`ADR-005` remplace un budget unique par deux, parce qu'il y a deux coûts distincts : le poids
+transféré, payé une fois au remplissage du cache, et le code hors commentaires, analysé à
+chaque démarrage à froid. Le second est le contraignant, à 185 Ko contre 173,5 mesurés. La
+vraie cible, First Paint sous une seconde sur iPhone 12, n'est toujours vérifiée par aucune
+machine et reste à mesurer à la main en J4.
+
+---
+
 ## Méthode
 
 Deux formes de preuve ont été utilisées, à valeur équivalente :

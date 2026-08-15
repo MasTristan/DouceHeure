@@ -1,68 +1,97 @@
 // Moteur d'apprentissage on-device et marge de sécurité invisible.
 // Règles : R3 (n'apprendre que du réel), R4 (marge jamais affichée).
 // Fonctions pures, aucun DOM.
+//
+// Les trois articles de J3 (S4) vivent ici : composition correcte des
+// variances (dans plan.js), variance a priori, estimateur robuste. Les
+// constantes ci-dessous sont calibrées par balayage contre ADR-002, pas
+// choisies à l'intuition, et vérifiées par tests/calibration.test.mjs.
 
 import { MAX_HISTORY } from './store.js';
 
-function meanAndSpread(values) {
-  const mean = values.reduce((a, b) => a + b, 0) / values.length;
-  const spread = values.length < 2
-    ? 0
-    : Math.sqrt(values.reduce((a, v) => a + (v - mean) ** 2, 0) / values.length);
-  return { mean, spread };
+// Sur 48 combinaisons balayées, 14 tenaient la cible. Celle-ci a été
+// retenue sur un principe : le terme de retard chronique garde tout son
+// poids, parce qu'il est la seule part de la marge qui s'adapte à la
+// personne plutôt qu'aux statistiques d'une étape. Ce qui a été rendu,
+// ce sont deux minutes de plancher fixe, la part qui ne dépendait de rien.
+const MARGIN_FLOOR = 1;
+const VAR_WEIGHT = 0.55;
+const LATE_WEIGHT = 8;
+// Garde-fou contre une dispersion pathologique. Avant J3 il était atteint
+// 99,8 % du temps, ce qui faisait de la marge « adaptative » une constante.
+const VAR_CAP = 10;
+
+// J3 article 2 · Sans mesure, `predict` rendait variance 0 : la marge était
+// minimale au moment où l'app est la plus ignorante. L'ignorance s'exprime
+// maintenant comme une dispersion a priori proportionnelle à l'estimation,
+// qui s'efface à mesure que la confiance monte. R3 intacte : on n'invente
+// aucune mesure, on dit qu'on ne sait pas encore.
+export const PRIOR_SPREAD_RATIO = 0.35;
+
+// J3 article 3 · Moyenne tronquée symétrique : une valeur extrême est
+// écartée au lieu d'être diluée. Une moyenne simple laissait un seul matin
+// aberrant gonfler le lever de 10 minutes pendant toute la profondeur du
+// FIFO. Ne tronquer que le haut a été mesuré aussi : plus optimiste donc
+// plus tard, ce n'est pas de la robustesse.
+function centerAndSpread(values) {
+  const kept = values.length >= 4 ? [...values].sort((a, b) => a - b).slice(1, -1) : values;
+  const center = kept.reduce((a, b) => a + b, 0) / kept.length;
+  if (kept.length < 2) return { center, spread: 0 };
+  return { center, spread: Math.sqrt(kept.reduce((a, v) => a + (v - center) ** 2, 0) / kept.length) };
 }
 
-// Renvoie { dur, variance, confidence } pour une étape dans un contexte donné.
-export function predict(step, ctx) {
-  const real = step.real || [];
-  if (real.length === 0) {
-    return { dur: step.est, variance: 0, confidence: 0 };
-  }
-
-  // Segmentation contextuelle : même jour OU même type.
-  let pool = real.filter((r) => r.day === ctx.day || r.type === ctx.type);
+// Coeur commun aux deux prédictions : mélange l'estimation déclarative et
+// le centre des mesures réelles, avec un poids qui croit avec leur nombre.
+// `segment` choisit les mesures pertinentes ; un segment de moins de deux
+// points retombe sur tout l'historique plutôt que de prédire sur un
+// souvenir unique. L'écart-type n'est pas arrondi : il est composé au carré
+// dans buildPlan, et arrondir avant d'élever au carré coutait jusqu'à une
+// demi-minute par étape.
+function blend(real, fallback, segment) {
+  const prior = fallback * PRIOR_SPREAD_RATIO;
+  if (real.length === 0) return { dur: fallback, variance: prior, confidence: 0 };
+  let pool = real.filter(segment);
   if (pool.length < 2) pool = real;
-
-  const { mean, spread } = meanAndSpread(pool.map((r) => r.v));
+  const { center, spread } = centerAndSpread(pool.map((r) => r.v));
   const w = Math.min(real.length / 5, 1);
-  const dur = Math.round(step.est * (1 - w) + mean * w);
-  return { dur, variance: Math.round(spread), confidence: w };
+  return {
+    dur: Math.round(fallback * (1 - w) + center * w),
+    variance: spread * w + prior * (1 - w),
+    confidence: w,
+  };
 }
 
-// Prédiction du trajet réel (F5, spec v2 §8.3) : même logique que predict(),
-// segmentée par jour, pondérée par le nombre de mesures.
-// fallback = durée déclarative utilisée tant qu'on n'a rien mesuré.
+// Segmentation contextuelle : même jour OU même type.
+export function predict(step, ctx) {
+  return blend(step.real || [], step.est, (r) => r.day === ctx.day || r.type === ctx.type);
+}
+
+// Trajet réel (F5, spec v2 §8.3) : même logique, segmentée par jour seul,
+// le transport étant déjà séparé dans le stockage. `fallback` est la durée
+// déclarative utilisée tant qu'on n'a rien mesuré.
 export function predictTravel(destination, transport, ctx, fallback) {
   const real = destination?.byTransport?.[transport]?.real || [];
-  if (real.length === 0) {
-    return { dur: fallback, variance: 0, confidence: 0 };
-  }
-
-  let pool = real.filter((r) => r.day === ctx.day);
-  if (pool.length < 2) pool = real;
-
-  const { mean, spread } = meanAndSpread(pool.map((r) => r.v));
-  const w = Math.min(real.length / 5, 1);
-  const dur = Math.round(fallback * (1 - w) + mean * w);
-  return { dur, variance: Math.round(spread), confidence: w };
+  return blend(real, fallback, (r) => r.day === ctx.day);
 }
 
-// Marge de sécurité invisible (R4).
-// SOUSTRAITE de l'heure de départ, JAMAIS affichée ni nommée à l'utilisateur.
-// varBoost : gonflement de la composante variance pour une destination encore
-// inconnue (spec v2 §8.2, +50 %), plafonné par le min(.., 10) existant.
-export function safetyMargin(totalVariance, latenessScore, varBoost = 1) {
-  const fromVar = Math.min(totalVariance * 0.8 * varBoost, 10);
-  const fromLate = latenessScore * 8;
-  return Math.round(3 + fromVar + fromLate);
+// Marge de sécurité invisible (R4) : SOUSTRAITE de l'heure de départ,
+// jamais affichée ni nommée.
+//
+// J3 (DEC-12) · `varBoost` a disparu. Il gonflait la composante variance
+// d'une destination jamais mesurée, mais multipliait une variance nulle :
+// il ne faisait rien précisément dans le cas pour lequel il existait. La
+// variance a priori couvre le même besoin, et fonctionne.
+export function safetyMargin(totalVariance, latenessScore) {
+  return Math.round(
+    MARGIN_FLOOR + Math.min(totalVariance * VAR_WEIGHT, VAR_CAP) + latenessScore * LATE_WEIGHT,
+  );
 }
 
-// B1 · Injecte uniquement des durées réellement mesurées entre deux
-// confirmations (R3). Appelée au fil de l'eau, à chaque confirmation, et non
-// plus seulement au bilan de fin de session : sans ça, fermer l'app pendant
-// le trajet (ce que l'écran Trajet invite explicitement à faire) perdait
-// silencieusement toutes les mesures de la préparation.
-// realDurs : tableau { stepKey, v }, une ou plusieurs mesures.
+// B1 · N'écrit que des durées réellement mesurées entre deux confirmations
+// (R3), au fil de l'eau plutôt qu'au bilan de fin de session : sans ça,
+// fermer l'app pendant le trajet (ce que l'écran Trajet invite à faire)
+// perdait silencieusement toutes les mesures de la préparation.
+// realDurs : tableau { stepKey, v }.
 export function recordDurations(state, realDurs, ctx) {
   const profileId = ctx.profileId ?? state.activeProfileId;
   const profile = state.profiles?.find((p) => p.id === profileId);
@@ -76,9 +105,8 @@ export function recordDurations(state, realDurs, ctx) {
   return state;
 }
 
-// Le bilan déclaratif ne conditionne plus l'écriture des durées (voir
-// recordDurations ci-dessus) : il ne met à jour que le ressenti de
-// ponctualité, latenessScore et l'historique.
+// Le bilan déclaratif ne conditionne plus l'écriture des durées : il ne met
+// à jour que le ressenti de ponctualité, latenessScore et l'historique.
 export function recordOutcome(state, status, ctx) {
   state.history.push({
     ts: Date.now(),
@@ -91,14 +119,5 @@ export function recordOutcome(state, status, ctx) {
 
   const target = status === 'late' ? 1 : status === 'ontime' ? 0.4 : 0.15;
   state.latenessScore = state.latenessScore * 0.6 + target * 0.4;
-  return state;
-}
-
-// Conservée pour composer les deux d'un coup là où c'est légitime (tests,
-// scénarios hors session live). Le guidage live n'appelle plus cette forme :
-// il appelle recordDurations au fil de l'eau et recordOutcome au bilan.
-export function onFeedback(state, status, realDurs, ctx) {
-  recordDurations(state, realDurs, ctx);
-  recordOutcome(state, status, ctx);
   return state;
 }

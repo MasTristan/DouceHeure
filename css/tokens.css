@@ -92,6 +92,11 @@
                    0 1px 4px rgba(0,0,0,0.3);
   --shadow-amber:  0 8px 32px rgba(232,180,80,0.18);
   --shadow-green:  0 8px 32px rgba(125,224,160,0.16);
+
+  /* Voile derrière la feuille de confirmation (DEC-03). Défini par scène :
+     de nuit il assombrit au lieu d'éclairer, pour que poser une question
+     à 3 h du matin ne réveille personne. */
+  --scrim:         rgba(0, 0, 0, 0.55);
 }
 
 /* ── Scène Plein jour (8h à 18h) ──────────────────────────────────
@@ -133,6 +138,8 @@
                   0 1px 4px rgba(90, 70, 40, 0.08);
   --shadow-amber: 0 8px 32px rgba(138, 96, 24, 0.14);
   --shadow-green: 0 8px 32px rgba(30, 106, 64, 0.12);
+
+  --scrim:        rgba(60, 45, 25, 0.42);
 }
 
 /* ── Scène Veillée (après 18h) : variante lampe, plus rouge ─────── */
@@ -186,6 +193,8 @@
   --shadow-card:  none;
   --shadow-amber: none;
   --shadow-green: none;
+
+  --scrim:        rgba(0, 0, 0, 0.86);
 }
 
 /* Mode lisible (spec v2 §3.4) : bascule de fonte, taille +12 %,

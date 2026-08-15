@@ -23,11 +23,17 @@ export function buildPlan(steps, arrival, travel, transportKey, latenessScore, c
   });
 
   const trip = predictTravel(destination, transportKey, ctx, travel);
-  // Destination déclarée mais encore jamais mesurée : marge gonflée (R4, jamais affichée).
-  const varBoost = destination && trip.confidence === 0 ? 1.5 : 1;
 
-  const totalVar = predicted.reduce((a, s) => a + s.variance, 0) + trip.variance;
-  const margin = safetyMargin(totalVar, latenessScore, varBoost);
+  // J3 article 1 (S4) · Composer les variances, pas les écarts-types.
+  // Additionner des écarts-types surestime la dispersion de leur somme
+  // d'un facteur 2,3 sur un profil réaliste. Conséquence mesurée : le
+  // terme de variance de safetyMargin était saturé à son plafond 99,8 %
+  // du temps, donc la marge « adaptative » était en réalité une
+  // constante, et l'était depuis l'origine.
+  const totalVar = Math.sqrt(
+    predicted.reduce((a, s) => a + s.variance ** 2, 0) + trip.variance ** 2,
+  );
+  const margin = safetyMargin(totalVar, latenessScore);
   const transportBuffer = TRANSPORT_BUFFER[transportKey] ?? 0;
 
   const arrivalMin = toMin(arrival);

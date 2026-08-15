@@ -98,11 +98,11 @@ class TinyElement extends TinyNode {
   }
   removeChild(node) {
     const idx = this.children.indexOf(node);
-    if (idx !== -1) { this.children.splice(idx, 1); node.parentNode = null; }
+    if (idx !== -1) { dropFocusWithin(node); this.children.splice(idx, 1); node.parentNode = null; }
     return node;
   }
   replaceChildren(...nodes) {
-    for (const c of this.children) c.parentNode = null;
+    for (const c of this.children) { dropFocusWithin(c); c.parentNode = null; }
     this.children = nodes;
     for (const n of nodes) n.parentNode = this;
   }
@@ -130,6 +130,22 @@ class TinyElement extends TinyNode {
 
   querySelector(selector) { return querySelectorIn(this, selector); }
   querySelectorAll(selector) { return querySelectorAllIn(this, selector); }
+}
+
+// J1 étape 9 · Le focus ne survit pas au retrait de son élément : c'est le
+// comportement de tous les navigateurs, et le harnais le taisait. Sans
+// ça, un test « le focus survit au ticker » passait au vert sur un écran
+// qui se reconstruisait entièrement toutes les 5 secondes, puisque
+// `activeElement` continuait de pointer un nœud détaché de la page. Un
+// harnais qui ment sur ce point rend indétectable exactement le défaut
+// que S2 §5 cherche à corriger.
+function dropFocusWithin(node) {
+  if (!node || node.nodeType !== 1) return;
+  const doc = node.ownerDocument;
+  if (!doc || !doc.activeElement) return;
+  for (let n = doc.activeElement; n; n = n.parentNode) {
+    if (n === node) { doc.activeElement = null; return; }
+  }
 }
 
 function matches(node, selector) {

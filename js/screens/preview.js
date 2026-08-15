@@ -3,11 +3,13 @@
 
 import { el, wordmark, topbar } from '../ui/dom.js';
 import { render } from '../ui/shell.js';
+import { askText } from '../ui/sheet.js';
 import { UI } from '../copy.js';
 import { fromMin } from '../time.js';
 import { loadState, saveState, getActiveProfile, getProfile, commitPreviewDefaults } from '../store.js';
 import { buildPlan, TRANSPORT_BUFFER } from '../plan.js';
 import { addDestination, getDestination } from '../travel.js';
+import { isBudgetShorterThanPlan } from '../calibrate.js';
 import { icon, TRANSPORT_ICONS } from '../icons.js';
 import * as audio from '../audio.js';
 import * as speech from '../speech.js';
@@ -55,9 +57,13 @@ export function showPreview(profileId, prefill = {}) {
       ),
       el('button', {
         class: 'pill',
-        onclick: () => {
-          const label = prompt(UI.preview_destination_prompt);
-          if (!label || !label.trim()) return;
+        onclick: async () => {
+          const label = await askText({
+            title: UI.preview_destination_prompt,
+            placeholder: UI.preview_destination_placeholder,
+            confirmLabel: UI.preview_destination_save,
+          });
+          if (!label) return;
           const dest = addDestination(state, label);
           data.destinationId = dest.id;
           saveState(state);
@@ -68,6 +74,18 @@ export function showPreview(profileId, prefill = {}) {
 
     // Trajet appris : plus besoin de l'estimation déclarative.
     const travelKnown = plan.travelConfidence > 0;
+
+    // J2 (S3 §2) · Le budget déclaré est plus court que le déroulé : le
+    // plan n'a pas été comprimé, et la personne a le droit de le savoir.
+    // L'Aperçu est une des trois surfaces où l'incertitude a le droit
+    // d'exister (ADR-003), et cette phrase porte sur le PLAN, jamais sur
+    // la prudence de l'app (R4).
+    const budgetFloored = profile.defaults.wakeTime
+      ? isBudgetShorterThanPlan({
+          steps, wakeTime: profile.defaults.wakeTime, arrival: data.arrival,
+          travel: data.travel, transportKey: data.transport,
+        })
+      : false;
 
     const timeline = plan.sequence.map((s) => {
       const isLeave = s.key === 'leave';
@@ -116,6 +134,8 @@ export function showPreview(profileId, prefill = {}) {
       ]),
 
       el('div', { class: 'spacer-md' }),
+      budgetFloored ? el('p', { class: 't-body t-body--sm' }, UI.preview_budget_floor) : null,
+      budgetFloored ? el('div', { class: 'spacer-sm' }) : null,
       el('div', { class: 't-label' }, UI.preview_sequence_label),
       el('div', { class: 'spacer-sm' }),
       el('div', { style: 'display:flex; flex-direction:column; gap:8px' }, timeline),

@@ -119,18 +119,19 @@ test('night/view.js : le mode chevet (renderNight, renderWakeProposal) expose un
   }
 });
 
-test('night/view.js : aucun prompt() ni confirm() n\'a ete introduit par ce correctif (ceux qui restent sont hors perimetre B2/B3, voir S1)', () => {
-  // Ce test ne verifie pas leur absence totale (remonte en J1/S1, DEC-03) :
-  // il verifie seulement qu'aucune NOUVELLE confirmation bloquante n'a ete
-  // ajoutee dans les deux fonctions touchees par ce correctif. Les
-  // commentaires de code sont exclus du comptage (ils peuvent legitimement
-  // mentionner "confirm()" en prose sans que ce soit un appel).
+test('night/view.js : la sortie du chevet ne passe plus par un confirm() natif (DEC-03)', () => {
+  // Ce test comptait auparavant EXACTEMENT un confirm(), pour verrouiller
+  // le seul dialogue natif preexistant sans interdire sa suppression a
+  // venir. J1 etape 8 l'a supprime : la cible est maintenant zero. Les
+  // commentaires sont exclus du comptage (ils mentionnent legitimement
+  // "confirm()" en prose pour raconter ce qui a ete retire).
   const start = nightViewSrc.indexOf('function renderNight');
   const end = nightViewSrc.indexOf('function renderWakeProposal');
   const nightBody = nightViewSrc.slice(start, end)
     .split('\n')
     .map((line) => line.replace(/\/\/.*$/, ''))
     .join('\n');
-  const confirmCalls = (nightBody.match(/confirm\(/g) || []).length;
-  assert.equal(confirmCalls, 1, 'renderNight doit garder exactement le confirm() natif preexistant, pas plus');
+  const nativeCalls = (nightBody.match(/(?<![.\w])(confirm|prompt|alert)\(/g) || []).length;
+  assert.equal(nativeCalls, 0, 'la sortie du chevet doit passer par la feuille (ui/sheet.js), pas par un dialogue natif');
+  assert.match(nightBody, /askConfirm\(/, 'la sortie du chevet doit demander confirmation via la feuille');
 });

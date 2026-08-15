@@ -3,6 +3,7 @@
 
 import { el, topbar, toast, settingRow } from '../ui/dom.js';
 import { render, isScreen, applySettings } from '../ui/shell.js';
+import { askConfirm } from '../ui/sheet.js';
 import { UI } from '../copy.js';
 import { loadState, saveState, getActiveProfile } from '../store.js';
 import { downloadExport, validateImport } from '../backup.js';
@@ -39,7 +40,13 @@ export function showSettings() {
         const text = await file.text();
         const result = validateImport(text);
         if (!result.ok) return toast(UI.settings_label, UI.settings_import_bad);
-        if (!confirm(UI.settings_import_confirm)) return;
+        const ok = await askConfirm({
+          title: UI.settings_import_confirm,
+          body: UI.settings_import_body,
+          confirmLabel: UI.settings_import_yes,
+          danger: true,
+        });
+        if (!ok) return;
         saveState(result.state);
         applySettings(result.state);
         toast(UI.settings_label, UI.settings_import_ok);

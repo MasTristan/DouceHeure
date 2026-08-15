@@ -5,16 +5,23 @@ import { el, wordmark, toast, settingRow } from '../ui/dom.js';
 import { render } from '../ui/shell.js';
 import { UI } from '../copy.js';
 import { loadState, saveState, getActiveProfile, ARCHETYPES, makeProfileFromArchetype } from '../store.js';
+import { calibrateSteps } from '../calibrate.js';
 import { TRANSPORT_BUFFER } from '../plan.js';
 import { icon, TRANSPORT_ICONS } from '../icons.js';
 import * as scene from '../scene.js';
 import { applySettings } from '../ui/shell.js';
 import { nav } from '../ui/nav.js';
 
+// Trajet de référence utilisé pour le calibrage initial, identique à la
+// valeur de départ de l'Aperçu. Le vrai trajet est appris ensuite (F5) et
+// le calibrage n'a pas à être exact : il n'a qu'à cesser d'être faux.
+const DEFAULT_TRAVEL = 20;
+
 export function showOnboarding() {
   const draft = {
     name: '',
     archetypeIdx: 1,
+    wakeTime: '07:00',
     arrival: '09:00',
     transport: 'walk',
     confirmMode: 'hold',
@@ -32,6 +39,18 @@ export function showOnboarding() {
       if (profile) {
         profile.defaults.arrival = draft.arrival;
         profile.defaults.transport = draft.transport;
+        // J2 (S3 §2) · Le calibrage par deux heures d'horloge. On ne
+        // demande aucune durée : le déroulé est mis à l'échelle du budget
+        // que la personne vient de décrire, uniquement vers le haut.
+        // Aucune écriture dans step.real (R3) : c'est une meilleure
+        // estimation déclarative, pas une mesure.
+        profile.defaults.wakeTime = draft.wakeTime;
+        profile.steps = calibrateSteps(profile.steps, {
+          wakeTime: draft.wakeTime,
+          arrival: draft.arrival,
+          travel: DEFAULT_TRAVEL,
+          transportKey: draft.transport,
+        });
       }
     }
     saveState(s);
@@ -84,10 +103,20 @@ export function showOnboarding() {
       el('div', { id: 'ob2-list', style: 'display:flex; flex-direction:column; gap:10px' }),
       el('div', { class: 'spacer-md' }),
       el('div', { class: 'card' }, [
+        el('div', { class: 't-label' }, UI.ob2_wake_label),
+        el('div', { class: 'spacer-sm' }),
+        el('input', {
+          class: 'time-input', type: 'time', value: draft.wakeTime,
+          'aria-label': UI.ob2_wake_label,
+          onchange: (e) => { draft.wakeTime = e.target.value || '07:00'; },
+        }),
+        el('p', { class: 't-body t-body--sm', style: 'margin-top:6px' }, UI.ob2_wake_help),
+        el('div', { class: 'spacer-md' }),
         el('div', { class: 't-label' }, UI.ob2_arrival_label),
         el('div', { class: 'spacer-sm' }),
         el('input', {
           class: 'time-input', type: 'time', value: draft.arrival,
+          'aria-label': UI.ob2_arrival_label,
           onchange: (e) => { draft.arrival = e.target.value || '09:00'; },
         }),
         el('div', { class: 'spacer-md' }),

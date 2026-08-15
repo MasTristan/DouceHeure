@@ -20,6 +20,20 @@ import * as haptics from '../haptics.js';
 
 let holdActive = false;
 
+// S2 §5 · Le bouton de confirmation n'est JAMAIS remplacé pendant une
+// session : son libellé change, son identité DOM non. Remplacer le nœud
+// renvoyait le focus clavier et le curseur VoiceOver en haut de page à
+// chaque battement du ticker, ce qui faisait de l'atteinte du bouton une
+// course contre l'horloge. C'est la seule façon autorisée de changer le
+// texte d'un bouton de confirmation déjà monté.
+export function setHoldLabel(btn, label) {
+  const span = btn.querySelector('.hold-btn__label');
+  if (span) span.textContent = label;
+  // Le chemin maintien porte un aria-label explicite (le remplissage est
+  // en aria-hidden) ; le chemin tap tire son nom de son contenu.
+  if (btn.hasAttribute('aria-label')) btn.setAttribute('aria-label', label);
+}
+
 // Lu par le rendu du live pour ne pas détruire un appui en cours (un
 // re-rendu du ticker pendant un maintien remplacerait le bouton sous le
 // doigt de l'utilisateur).

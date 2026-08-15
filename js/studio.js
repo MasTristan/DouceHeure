@@ -4,6 +4,7 @@
 import { loadState, saveState, ARCHETYPES, makeProfileFromArchetype, makeChecklist, MAX_PROFILES, MAX_STEPS } from './store.js';
 import { buildPlan, TRANSPORT_BUFFER } from './plan.js';
 import { addDestination } from './travel.js';
+import { calibrateSteps } from './calibrate.js';
 import { fromMin } from './time.js';
 import { icon, STEP_ICON_CHOICES, TRANSPORT_ICONS } from './icons.js';
 import * as haptics from './haptics.js';
@@ -11,11 +12,17 @@ import { UI } from './copy.js';
 // J1 découpe étape 1 (Nour, R1 §1.4) : el() dupliqué à l'identique avec
 // celui de ui.js, dédupliqué dans ui/dom.js dont les deux importent.
 import { el } from './ui/dom.js';
+import { askConfirm, askText } from './ui/sheet.js';
 // J1 découpe étape 3 (Nour, R1 §1.3) : registre de navigation plutôt qu'un
 // import() dynamique de ui.js (qui cassait le cycle statique en le
 // reportant à l'exécution, au prix d'une latence au pire moment : un tap
 // en Low Power Mode à 6h45).
 import { nav } from './ui/nav.js';
+
+// Trajet de référence du calibrage dans le Studio, identique à celui de
+// l'onboarding et à la valeur de départ de l'Aperçu. Le vrai trajet est
+// appris ensuite (F5).
+const STUDIO_TRAVEL = 20;
 
 // --- État du Studio ---
 
@@ -32,13 +39,20 @@ function autosave() {
 
 // --- Logique pure (exportée pour clarté et réutilisation) ---
 
-export function createStep(iconName, label, dur) {
+// J2 (DEC-12) · Plus aucune durée n'est demandée, y compris à la création
+// d'une étape. NEW_STEP_EST n'est qu'un point de départ neutre : le
+// calibrage le met à l'échelle du budget observé, et l'apprentissage le
+// remplace par la vraie durée en quelques matins (R3).
+export const NEW_STEP_EST = 10;
+
+export function createStep(iconName, label, dur = NEW_STEP_EST) {
   return {
     key: `free-${Date.now()}`,
     label,
     icon: iconName,
     emoji: null,
     est: Math.max(2, dur),
+    estBase: Math.max(2, dur),
     active: true,
     fixed: false,
     kind: 'comfort',
@@ -183,7 +197,6 @@ function openAddStepModal() {
 
   let newIcon = 'star';
   let newLabel = '';
-  let newDur = 10;
 
   const iconBtn = el('button', {
     class: 'add-step-emoji-btn',
@@ -206,26 +219,17 @@ function openAddStepModal() {
     },
   });
 
-  const durValue = el('div', { class: 'add-step-dur-value' }, newDur + ' min');
-  const durInput = el('input', {
-    class: 'dur-slider', type: 'range', min: '2', max: '45', step: '1',
-    value: String(newDur), 'aria-label': 'Durée en minutes',
-    oninput: (e) => {
-      const v = Number(e.target.value);
-      if (v !== newDur) haptics.buzz('crank');
-      newDur = v;
-      durValue.textContent = newDur + ' min';
-    },
-  });
-
   const addBtn = el('button', {
     class: 'btn btn--primary', disabled: true,
     onclick: () => {
       if (!newLabel.trim()) return;
       const profile = activeProfile();
       if (!profile || profile.steps.length >= MAX_STEPS) return;
-      const step = createStep(newIcon, newLabel.trim(), newDur);
+      const step = createStep(newIcon, newLabel.trim());
       profile.steps.splice(profile.steps.length - 1, 0, step);
+      // La nouvelle étape entre dans le budget observé comme les autres,
+      // puis se fait apprendre en quelques matins (R3).
+      recalibrate(profile);
       autosave();
       modal.remove();
       renderStudio();
@@ -237,13 +241,6 @@ function openAddStepModal() {
       el('div', { class: 'studio-modal__handle' }),
       el('div', { class: 't-label', style: 'margin-bottom: 16px' }, 'Nouvelle étape'),
       el('div', { class: 'add-step-row' }, [iconBtn, labelInput]),
-      el('div', { class: 'spacer-md' }),
-      el('div', { class: 'add-step-dur-row' }, [
-        el('div', { class: 't-label' }, 'Durée'),
-        durValue,
-      ]),
-      el('div', { class: 'spacer-sm' }),
-      durInput,
       el('div', { class: 'spacer-md' }),
       addBtn,
       el('div', { class: 'spacer-sm' }),
@@ -383,21 +380,11 @@ function buildStepCard(step, idx, profile, listEl) {
     },
   }, step.kind === 'core' ? UI.studio_core : UI.studio_comfort);
 
-  // Durée : slider à crans de 1 min (estimation de configuration,
-  // autorisée hors session).
-  const durValue = el('span', { class: 'studio-step__dur' }, step.est + ' min');
-  const durSlider = el('input', {
-    class: 'dur-slider dur-slider--sm', type: 'range',
-    min: '2', max: '60', step: '1', value: String(step.est),
-    'aria-label': `Durée de ${step.label} en minutes`,
-    oninput: (e) => {
-      const v = Number(e.target.value);
-      if (v !== step.est) haptics.buzz('crank');
-      step.est = v;
-      durValue.textContent = v + ' min';
-    },
-    onchange: () => { autosave(); },
-  });
+  // J2 (DEC-12) · Le réglage de durée par étape a disparu. C'était une
+  // question à laquelle le public visé ne peut pas bien répondre, et les
+  // simulations montrent que la totalité de l'échec du premier jour venait
+  // de la réponse. Le déroulé se cale maintenant sur le lever habituel
+  // (buildDefaultsCard), une heure d'horloge que la personne connait.
 
   const deleteBtn = !step.fixed
     ? el('button', {
@@ -435,10 +422,6 @@ function buildStepCard(step, idx, profile, listEl) {
       kindPill,
       step.fixed ? null : toggleActive,
       deleteBtn,
-    ]),
-    el('div', { class: 'studio-step__row studio-step__row--dur' }, [
-      durSlider,
-      durValue,
     ]),
   ]);
 
@@ -532,17 +515,48 @@ function buildChecklistCard(profile) {
 
 // --- Défauts du profil : arrivée, transport, destination ---
 
+// J2 (S3 §2) · Recale le déroulé sur le budget observé. Idempotent :
+// calibrateSteps repart toujours de l'estimation de référence, jamais du
+// résultat du calibrage précédent, donc changer trois fois d'heure de
+// lever ne fait pas dériver le plan.
+function recalibrate(profile) {
+  if (!profile.defaults.wakeTime || !profile.defaults.arrival) return;
+  profile.steps = calibrateSteps(profile.steps, {
+    wakeTime: profile.defaults.wakeTime,
+    arrival: profile.defaults.arrival,
+    travel: STUDIO_TRAVEL,
+    transportKey: profile.defaults.transport || 'walk',
+  });
+}
+
 function buildDefaultsCard(profile) {
   return el('div', { class: 'card' }, [
     el('div', { class: 't-label' }, UI.studio_defaults_label),
     el('div', { class: 'spacer-sm' }),
+    el('div', { class: 't-label', style: 'font-size:10px' }, UI.studio_default_wake),
+    el('div', { class: 'spacer-sm' }),
+    el('input', {
+      class: 'time-input', type: 'time', value: profile.defaults.wakeTime || '',
+      'aria-label': UI.studio_default_wake,
+      onchange: (e) => {
+        profile.defaults.wakeTime = e.target.value || null;
+        recalibrate(profile);
+        autosave();
+        renderStudio();
+      },
+    }),
+    el('p', { class: 't-body t-body--sm', style: 'margin-top:6px' }, UI.studio_default_wake_help),
+    el('div', { class: 'spacer-md' }),
     el('div', { class: 't-label', style: 'font-size:10px' }, UI.studio_default_arrival),
     el('div', { class: 'spacer-sm' }),
     el('input', {
       class: 'time-input', type: 'time', value: profile.defaults.arrival || '',
+      'aria-label': UI.studio_default_arrival,
       onchange: (e) => {
         profile.defaults.arrival = e.target.value || null;
+        recalibrate(profile);
         autosave();
+        renderStudio();
       },
     }),
     el('div', { class: 'spacer-md' }),
@@ -554,6 +568,7 @@ function buildDefaultsCard(profile) {
           class: 'pill' + (profile.defaults.transport === k ? ' is-on' : ''),
           onclick: () => {
             profile.defaults.transport = k;
+            recalibrate(profile);
             autosave();
             renderStudio();
           },
@@ -576,9 +591,13 @@ function buildDefaultsCard(profile) {
       ),
       el('button', {
         class: 'pill',
-        onclick: () => {
-          const label = prompt(UI.preview_destination_prompt);
-          if (!label || !label.trim()) return;
+        onclick: async () => {
+          const label = await askText({
+            title: UI.preview_destination_prompt,
+            placeholder: UI.preview_destination_placeholder,
+            confirmLabel: UI.preview_destination_save,
+          });
+          if (!label) return;
           const dest = addDestination(studioState, label);
           profile.defaults.destinationId = dest.id;
           autosave();
@@ -632,8 +651,14 @@ function renderStudio() {
   const deleteProfileBtn = studioState.profiles.length > 1
     ? el('button', {
         class: 'btn btn--ghost', style: 'font-size:13px; opacity:0.7',
-        onclick: () => {
-          if (!confirm(`${UI.studio_delete_profile} ?`)) return;
+        onclick: async () => {
+          const ok = await askConfirm({
+            title: UI.studio_delete_confirm,
+            confirmLabel: UI.studio_delete_yes,
+            cancelLabel: UI.studio_delete_no,
+            danger: true,
+          });
+          if (!ok) return;
           studioState.profiles = studioState.profiles.filter((p) => p.id !== studioActiveId);
           studioActiveId = studioState.profiles[0].id;
           if (studioState.activeProfileId !== studioActiveId

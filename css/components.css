@@ -1613,6 +1613,14 @@ body.in-studio {
   55%  { transform: scale(1.012); }
   100% { transform: scale(1); }
 }
+/* Armé (S2 §3, chemin assistif) : la première activation ne fait pas
+   avancer, elle arme. L'état doit se voir, sinon la seconde activation
+   ressemble à une répétition inutile. Pas d'animation : ce n'est pas une
+   alerte, c'est une attente. */
+.hold-btn.is-armed {
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-amber);
+}
 .hold-btn.state-suggested {
   border-color: var(--amber-mid);
   box-shadow: var(--shadow-amber);
@@ -2010,10 +2018,63 @@ body.in-studio {
 
 .toast .toast__title { color: var(--text); }
 
-/* ── Réduction de mouvement : le remplissage de l'appui tenu reste
-     fonctionnel mais sans animation longue. ───────────────────── */
+/* ── Réduction de mouvement (S2 §4, DEC-07) ────────────────────────
+     Le mouvement est réduit, la DURÉE DU GESTE ne l'est pas. Écraser le
+     remplissage à 150 ms alors que l'appui dure 600 ms faisait mentir la
+     seule jauge dont l'utilisateur dispose : elle atteignait le bout puis
+     il fallait continuer d'appuyer sans rien voir. Le remplissage garde
+     donc la durée réelle du geste ; ce qui est retiré, c'est le ressort
+     de l'annulation, qui lui est décoratif. */
 @media (prefers-reduced-motion: reduce) {
-  .hold-btn.is-holding .hold-btn__fill {
-    transition-duration: 150ms;
+  .hold-btn.is-spring {
+    animation: none;
+  }
+}
+
+/* ── Feuille de confirmation (DEC-03) ──────────────────────────────
+     Remplace les confirm()/prompt() natifs. Mêmes tokens que le reste :
+     de nuit, elle hérite de la scène et n'éblouit pas. */
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--scrim);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn var(--dur-fast) ease both;
+}
+.sheet__panel {
+  width: 100%;
+  max-width: 440px;
+  background: var(--surface-hi);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: 20px var(--space-md) 36px;
+  animation: sheetUp var(--dur-mid) var(--ease-out) both;
+  max-height: 90dvh;
+  overflow-y: auto;
+}
+.sheet__handle {
+  width: 40px;
+  height: 4px;
+  background: var(--border-hi);
+  border-radius: 999px;
+  margin: 0 auto 20px;
+}
+.sheet__input {
+  width: 100%;
+}
+.sheet__actions {
+  display: flex;
+  gap: 10px;
+}
+.sheet__action {
+  flex: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .sheet__panel {
+    animation: none;
   }
 }
