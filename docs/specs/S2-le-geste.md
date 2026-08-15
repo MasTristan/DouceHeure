@@ -3,15 +3,22 @@
 **Jalons** : minimum vital en J0 (B2, B3), forme définitive en J4
 **Propriétaire** : Iris Tanaka · **Tests** : Milo Vasseur · **Chaînes** : Camille Ndiaye
 
-> **Statut : le minimum vital de J0 est livré** (voir `S0-statut.md`). Les quatre chemins
-> décrits en §3 (maintien, clavier, assistif, tap) sont implémentés dans
-> `js/confirm-control.js` et câblés dans `holdButton()` ainsi que dans le mode chevet. Ce qui
-> reste dû à ce document, pour J1/J4 : le live qui cesse de se reconstruire (§5, cause de la
-> fenêtre de 8 s plutôt qu'illimitée sur le chemin assistif), les chaînes prononcées
-> demandées à Camille (§7), le style visuel de l'état armé, et la conception définitive de la
-> feuille remplaçant les quatre dialogues natifs (§3.1, toujours en attente, DEC-03).
-> **Les numéros de ligne ci-dessous datent d'avant J0** : `ui.js` a grossi d'environ 80
-> lignes pendant les correctifs B1 à B3, ils sont à revérifier avant tout travail dessus.
+> **Statut : J0 et J1 sont livrés** (voir `S0-statut.md` et `S1-statut.md`). Les quatre
+> chemins décrits en §3 (maintien, clavier, assistif, tap) sont implémentés dans
+> `js/confirm-control.js` et câblés dans `holdButton()` ainsi que dans le mode chevet.
+> Livré en J1 étape 9 : **le live cesse de se reconstruire (§5)**, ce qui lève la cause
+> racine et rend enfin utilisables les chemins clavier et assistif. Livré en J1 étape 8 :
+> **les dialogues natifs ont disparu** (§3.1, DEC-03), remplacés par `js/ui/sheet.js`.
+> Livrés en passant : le style visuel de l'état armé, et la correction du remplissage sous
+> `prefers-reduced-motion` (§4).
+>
+> **Reste dû à J4** : les chaînes prononcées à l'armement (§7, propriété de Camille), la
+> conception définitive de la feuille (forme, animation, ergonomie à une main), et §6, le
+> mode chevet actionnable au-delà de la sortie.
+>
+> **Les numéros de ligne ci-dessous datent d'avant J0**, et `js/ui.js` n'existe plus : la
+> découpe de J1 l'a réparti dans `ui/`, `live/`, `night/` et `screens/`. Les références de
+> ligne sont donc historiques, à ne pas suivre littéralement.
 
 Le geste de confirmation est le seul mécanisme par lequel l'app avance. C'est donc le seul
 endroit où R2 se gagne ou se perd, et c'est aujourd'hui le composant le plus défaillant du

@@ -23,13 +23,13 @@ spec Pro Max v2 (référence de détail).
 
 ## Ordre d'exécution
 
-| Jalon | Spec | Objet |
-|---|---|---|
-| J0 | `S0-ce-qui-saigne.md` | Huit défauts vérifiés, moins de 150 lignes |
-| J1 | `S1-socle-de-confiance.md`, `S2-le-geste.md` | CI, filet, extraction, découpe, dialogues natifs |
-| J2 | `S3-la-premiere-semaine.md` | Ne plus demander une durée, retourner le jour 1 |
-| J3 | `S4-le-moteur.md` | Composition, variance a priori, estimateur robuste |
-| J4 | à écrire | Dynamic Type, feuille définitive, nuit réelle |
+| Jalon | Spec | Objet | État |
+|---|---|---|---|
+| J0 | `S0-ce-qui-saigne.md` | Huit défauts vérifiés, moins de 150 lignes | clos (`S0-statut.md`) |
+| J1 | `S1-socle-de-confiance.md`, `S2-le-geste.md` | CI, filet, extraction, découpe, dialogues natifs | clos (`S1-statut.md`) |
+| J2 | `S3-la-premiere-semaine.md` | Ne plus demander une durée, retourner le jour 1 | en cours |
+| J3 | `S4-le-moteur.md` | Composition, variance a priori, estimateur robuste | à faire |
+| J4 | à écrire | Dynamic Type, feuille définitive, nuit réelle | à faire |
 
 ## Ce qu'il faut savoir avant de toucher au code
 
