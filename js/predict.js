@@ -12,39 +12,32 @@ function meanAndSpread(values) {
   return { mean, spread };
 }
 
-// Renvoie { dur, variance, confidence } pour une étape dans un contexte donné.
-export function predict(step, ctx) {
-  const real = step.real || [];
-  if (real.length === 0) {
-    return { dur: step.est, variance: 0, confidence: 0 };
-  }
-
-  // Segmentation contextuelle : même jour OU même type.
-  let pool = real.filter((r) => r.day === ctx.day || r.type === ctx.type);
+// Coeur commun aux deux prédictions : mélange l'estimation déclarative et
+// la moyenne des mesures réelles, avec un poids qui croit avec le nombre
+// de mesures. `segment` choisit lesquelles sont pertinentes ici ; un
+// segment trop maigre (moins de deux points) retombe sur tout l'historique
+// plutôt que de prédire sur un souvenir unique.
+function blend(real, fallback, segment) {
+  if (real.length === 0) return { dur: fallback, variance: 0, confidence: 0 };
+  let pool = real.filter(segment);
   if (pool.length < 2) pool = real;
-
   const { mean, spread } = meanAndSpread(pool.map((r) => r.v));
   const w = Math.min(real.length / 5, 1);
-  const dur = Math.round(step.est * (1 - w) + mean * w);
-  return { dur, variance: Math.round(spread), confidence: w };
+  return { dur: Math.round(fallback * (1 - w) + mean * w), variance: Math.round(spread), confidence: w };
 }
 
-// Prédiction du trajet réel (F5, spec v2 §8.3) : même logique que predict(),
-// segmentée par jour, pondérée par le nombre de mesures.
+// Renvoie { dur, variance, confidence } pour une étape dans un contexte donné.
+// Segmentation contextuelle : même jour OU même type.
+export function predict(step, ctx) {
+  return blend(step.real || [], step.est, (r) => r.day === ctx.day || r.type === ctx.type);
+}
+
+// Prédiction du trajet réel (F5, spec v2 §8.3) : même logique, segmentée
+// par jour seulement (le transport est déjà séparé dans le stockage).
 // fallback = durée déclarative utilisée tant qu'on n'a rien mesuré.
 export function predictTravel(destination, transport, ctx, fallback) {
   const real = destination?.byTransport?.[transport]?.real || [];
-  if (real.length === 0) {
-    return { dur: fallback, variance: 0, confidence: 0 };
-  }
-
-  let pool = real.filter((r) => r.day === ctx.day);
-  if (pool.length < 2) pool = real;
-
-  const { mean, spread } = meanAndSpread(pool.map((r) => r.v));
-  const w = Math.min(real.length / 5, 1);
-  const dur = Math.round(fallback * (1 - w) + mean * w);
-  return { dur, variance: Math.round(spread), confidence: w };
+  return blend(real, fallback, (r) => r.day === ctx.day);
 }
 
 // Marge de sécurité invisible (R4).

@@ -179,6 +179,12 @@ export const UI = {
   ob1_cta: 'Continuer',
   ob2_title: 'Ton premier départ',
   ob2_body: 'Choisis un point de départ. Tout se modifie après.',
+  // J2 (S3 §2) · On ne demande plus jamais une durée. On demande deux
+  // heures d'horloge que la personne connait : son lever habituel et son
+  // arrivée. Une heure cible est autorisée par R1, une durée demandée à
+  // quelqu'un qui ne sait pas l'évaluer ne l'est pas.
+  ob2_wake_label: 'À quelle heure tu te lèves, en général ?',
+  ob2_wake_help: "Pas l'heure idéale : celle de tes vrais matins.",
   ob2_arrival_label: 'Arrivée à',
   ob2_transport_label: 'Transport',
   ob2_cta: 'Continuer',
@@ -230,6 +236,10 @@ export const UI = {
   preview_cta: "C'est parti",
   preview_back: 'Retour',
   preview_learned: 'Calé sur tes vraies durées.',
+  // Le budget déclaré est plus court que le déroulé : le plan n'est pas
+  // comprimé et on le dit. Surface autorisée (ADR-003, l'Aperçu). Énonce
+  // un fait sur le plan, jamais sur la prudence de l'app (R4).
+  preview_budget_floor: "Ce déroulé demande un peu plus de temps que celui que tu m'as donné.",
 
   // Live
   live_current_label: 'En ce moment',
@@ -329,6 +339,8 @@ export const UI = {
   studio_checklist_add: '+ Ajouter un objet',
   studio_checklist_placeholder: "Nom de l'objet",
   studio_defaults_label: 'Par défaut',
+  studio_default_wake: 'Lever habituel',
+  studio_default_wake_help: "Je cale le déroulé dessus. Tu n'as aucune durée à régler.",
   studio_default_arrival: 'Arrivée habituelle',
   studio_default_transport: 'Transport habituel',
   studio_default_destination: 'Destination habituelle',

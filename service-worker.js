@@ -2,7 +2,7 @@
 // Cache versionné explicite (spec v2 §17) : app 100 % offline après
 // premier chargement, polices auto-hébergées comprises.
 
-const VERSION = 'v2.4.1'; // J1 etape 9 : le live se met a jour, il ne se reconstruit plus
+const VERSION = 'v2.5.0'; // J2 : calibrage par deux heures d'horloge, plus aucune duree demandee
 const CACHE = `douce-heure-${VERSION}`;
 
 const ASSETS = [
@@ -18,6 +18,7 @@ const ASSETS = [
   './js/time.js',
   './js/predict.js',
   './js/plan.js',
+  './js/calibrate.js',
   './js/travel.js',
   './js/bedside.js',
   './js/backup.js',

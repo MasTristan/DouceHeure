@@ -344,6 +344,69 @@ durée réelle sous `prefers-reduced-motion`.
 
 ---
 
+## J2 · La première semaine (S3)
+
+### Le simulateur d'abord, la correction ensuite
+
+`tests/tools/simulate.mjs` a été écrit **avant** toute modification du produit. Les chiffres
+de la réunion d'ouverture (« un matin sur deux en retard au jour 1 ») vivaient dans un compte
+rendu et personne ne pouvait les recalculer : le générateur n'avait jamais été versionné.
+
+**Les chiffres de ce simulateur ne sont pas ceux de R1, et il faut le dire.** R1 annonçait
+50 % de matins en retard au jour 1 ; cette re-dérivation en trouve 71 %. Ce n'est pas la même
+expérience, c'est une reconstruction du même raisonnement. La conclusion qualitative est
+identique et plus dure. Ce que le simulateur assume est écrit en tête du fichier, notamment
+l'hypothèse la plus favorable de toutes : l'utilisateur simulé se lève à l'heure proposée.
+
+### Ce que le calibrage change, mesuré
+
+Population de 300 utilisateurs, 20 matins, biais de déclaration 1,4, battement de 5 minutes.
+
+| | jour 1 | jour 2 | jour 3 | régime établi | avance établie |
+|---|---|---|---|---|---|
+| avant | 71 % en retard | 58 % | 21 % | 1 % | 17,3 min |
+| après | **4 %** | 4 % | 1 % | 1 % | 17,3 min |
+
+Le régime établi ne bouge pas d'un pouce, et c'est le résultat le plus important après le
+premier : le calibrage agit sur la fenêtre où l'app ne sait rien, puis s'efface dès que les
+mesures réelles pèsent dans la prédiction. Un test le vérifie explicitement, pour qu'une
+version future du calibrage ne puisse pas fuiter au-delà de sa fenêtre.
+
+Le coût est le lever : 105 minutes avant l'arrivée au jour 1 contre 83 avant. Ce n'est pas
+une aggravation, c'est le respect de ce que la personne a déclaré : elle se lève déjà à cette
+heure-là. L'app cesse simplement de lui promettre qu'elle peut se lever plus tard.
+
+Robustesse vérifiée sur trois biais de déclaration (1,0 / 1,4 / 1,8). Au pire cas, une
+personne qui met presque le double de ce qu'elle croit, le jour 1 passe de 98 % à 8 %.
+
+### Preuves au rouge
+
+| Régression posée | Tests qui virent au rouge |
+|---|---|
+| Le calibrage descend aussi vers le bas (compression du plan) | « jamais vers le bas », « un budget plus court ne comprime pas le plan » |
+| `estBase` ignoré, la référence devient le résultat précédent | idempotence, « changer d'heure de lever recalibre depuis la référence », `baseEst` |
+| L'onboarding ne calibre plus | « l'onboarding calibre réellement le déroulé » |
+| Calibrage neutralisé (échelle figée à 1) | 3 des 6 tests du harnais de calibration, dont celui du jour 1 |
+
+Le dernier compte double : il prouve que le harnais voit un calibrage cassé, pas seulement un
+calibrage absent.
+
+### Le budget de performance était un souhait, il redevient une contrainte
+
+`CLAUDE.md` §3 fixe « JS total < 220 Ko non minifié » depuis l'origine. **Rien ne le
+vérifiait.** J2 l'a dépassé de 901 octets sans que quoi que ce soit ne le signale, ce qui est
+exactement la façon dont une contrainte d'architecture meurt.
+
+`tests/budget.test.mjs` la rend mécanique. Le dépassement a été résorbé en factorisant deux
+duplications réelles (le coeur commun de `predict` et `predictTravel`, le calcul du budget
+écrit deux fois dans `calibrate.js`) et en ramenant les commentaires de `calibrate.js` à la
+densité du reste du dépôt : ils y occupaient 56 % du fichier, contre 15 à 20 % ailleurs.
+
+**Il reste 396 octets.** Ce n'est pas une marge, c'est un signal : J3 devra retirer quelque
+chose avant d'ajouter, et le décider explicitement.
+
+---
+
 ## Méthode
 
 Deux formes de preuve ont été utilisées, à valeur équivalente :
