@@ -2,7 +2,7 @@
 // Cache versionné explicite (spec v2 §17) : app 100 % offline après
 // premier chargement, polices auto-hébergées comprises.
 
-const VERSION = 'v2.4.0'; // J1 etape 8 : la feuille de confirmation remplace les dialogues natifs
+const VERSION = 'v2.4.1'; // J1 etape 9 : le live se met a jour, il ne se reconstruit plus
 const CACHE = `douce-heure-${VERSION}`;
 
 const ASSETS = [

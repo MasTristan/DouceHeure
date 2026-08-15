@@ -305,6 +305,45 @@ l'exigence positive que la sortie du chevet passe bien par `askConfirm`.
 
 ---
 
+## J1 étape 9 · Le live cesse de se reconstruire (S2 §5)
+
+L'écran live construit son arbre une fois par session et n'écrit ensuite que les quelques
+nœuds qui changent. Le bouton de confirmation n'est jamais remplacé.
+
+**Ces tests portent sur l'identité des nœuds, pas sur leur contenu.** C'est l'identité qui
+porte le focus, l'armement du geste et la sélection de l'utilisateur. Un test de contenu
+serait passé au vert sur le code fautif : le contenu était correct, c'est le nœud qui
+disparaissait.
+
+Trois régressions distinctes ont été posées, parce qu'une seule ne suffisait pas à éprouver
+les sept tests. C'est le point utile de ce jalon : la première preuve a montré que quatre
+tests sur sept ne voyaient pas la régression qu'ils étaient censés voir.
+
+| Régression posée | Tests qui virent au rouge |
+|---|---|
+| **A.** `canReuse()` renvoie toujours `false` : reconstruction complète à chaque battement, comportement littéral d'avant | 1 (bouton remplacé), 2 (focus perdu), 3 (armement perdu), 6 (libellé remplacé) |
+| **B.** les deux messages retirés au sort à chaque rendu (défaut relevé par Camille) | 4 (message d'étape), 5 (message de suggestion) |
+| **C.** `canReuse()` ne vérifie plus à quelle session appartient le montage | 2, 3, 4, 6, 7 (montage mort réutilisé par la session suivante) |
+
+**Le harnais mentait, et il a fallu le corriger avant de valider un test.** À la première
+preuve, le test « le focus survit au ticker » restait vert sous la régression A.
+`tests/tiny-dom.mjs` gardait `activeElement` pointé sur un nœud détaché de la page, ce
+qu'aucun navigateur ne fait. Le harnais rendait donc indétectable exactement le défaut que
+S2 §5 corrige. `dropFocusWithin()` a été ajouté à `removeChild` et `replaceChildren` : le
+focus tombe avec l'élément qui le portait. Le test vire au rouge depuis.
+
+**Effet de bord attendu, obtenu** (Camille, S2 §5). `pick('suggested')` était retiré au sort
+à chaque rendu et son pool compte deux entrées : les deux phrases alternaient strictement
+toutes les 5 secondes sous les yeux de l'utilisateur. Le message d'une étape est maintenant
+tiré une fois et ne bouge plus.
+
+**Ce qui reste dû à J4** sur ce composant : les chaînes prononcées à l'armement (S2 §7,
+propriété de Camille), et la conception définitive de la feuille (S2 §3.1, Iris). L'état
+armé a maintenant un style visible (`is-armed`) et le remplissage de l'appui tenu garde sa
+durée réelle sous `prefers-reduced-motion`.
+
+---
+
 ## Méthode
 
 Deux formes de preuve ont été utilisées, à valeur équivalente :
