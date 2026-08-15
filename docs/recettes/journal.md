@@ -268,6 +268,43 @@ et `README.md` mis à jour pour refléter l'arborescence finale (`ui/`, `live/`,
 
 ---
 
+## J1 étape 8 · La feuille remplace les dialogues natifs (DEC-03)
+
+Cinq sites d'appel supprimés, pas quatre : le compte de la vision datait d'avant J0. Sortie
+du mode chevet (`night/view.js`), import de sauvegarde (`screens/settings.js`), suppression
+d'un départ et création de destination (`studio.js`, deux sites), création de destination
+depuis l'Aperçu (`screens/preview.js`).
+
+| Test | Preuve au rouge |
+|---|---|
+| S2 §8 · aucun dialogue natif dans `js/` (`tests/sheet.test.mjs`) | `confirm(UI.settings_import_confirm)` réintroduit dans `screens/settings.js` : le test échoue en nommant le fichier et l'appel |
+| Restauration du focus | La ligne `previousFocus.focus()` retirée de `ui/sheet.js` : le test « le focus revient d'où il vient » échoue |
+| Échap vaut renoncement | Branche `if (e.key === 'Escape')` neutralisée : le test échoue, et huit autres restent en suspens (la promesse ne se résout plus jamais), ce qui est exactement le symptôme qu'un utilisateur subirait |
+
+**Ce que le test structurel protège vraiment.** Ce n'est pas une règle de style. Un
+`confirm()` est bloquant et non simulable : il rend une zone du produit inatteignable par la
+qualité, et les cinq se trouvaient sur les deux chemins les plus destructeurs de l'app,
+perdre sa nuit et perdre ses données. Le test interdit mécaniquement leur retour.
+
+**Deux décisions d'ergonomie prises dans ce composant**, toutes deux vérifiées par un test.
+Le focus part sur le renoncement et jamais sur l'action destructrice. Valider une saisie
+vide ne ferme pas la feuille : une saisie vide n'est pas une réponse, et fermer sur ce geste
+transformerait une hésitation en renoncement.
+
+**Correction annexe (S2 §4).** `prefers-reduced-motion` écrasait le remplissage de l'appui
+tenu à 150 ms alors que le geste dure 600 ms : la jauge atteignait le bout, puis il fallait
+continuer d'appuyer sans aucun retour. Le remplissage garde désormais la durée réelle du
+geste ; c'est le ressort d'annulation, purement décoratif, qui est retiré sous réduction de
+mouvement. L'état armé du chemin assistif (`is-armed`), jusqu'ici posé côté JS sans style,
+est maintenant visible.
+
+**Un test existant a changé de cible, volontairement.** `tests/confirm-control-wiring.test.mjs`
+verrouillait *exactement un* `confirm()` dans `renderNight` (garde de J0 contre l'ajout d'un
+second, sans interdire la suppression du premier). Sa cible est maintenant zéro, plus
+l'exigence positive que la sortie du chevet passe bien par `askConfirm`.
+
+---
+
 ## Méthode
 
 Deux formes de preuve ont été utilisées, à valeur équivalente :

@@ -3,6 +3,7 @@
 
 import { el, wordmark, topbar } from '../ui/dom.js';
 import { render } from '../ui/shell.js';
+import { askText } from '../ui/sheet.js';
 import { UI } from '../copy.js';
 import { fromMin } from '../time.js';
 import { loadState, saveState, getActiveProfile, getProfile, commitPreviewDefaults } from '../store.js';
@@ -55,9 +56,13 @@ export function showPreview(profileId, prefill = {}) {
       ),
       el('button', {
         class: 'pill',
-        onclick: () => {
-          const label = prompt(UI.preview_destination_prompt);
-          if (!label || !label.trim()) return;
+        onclick: async () => {
+          const label = await askText({
+            title: UI.preview_destination_prompt,
+            placeholder: UI.preview_destination_placeholder,
+            confirmLabel: UI.preview_destination_save,
+          });
+          if (!label) return;
           const dest = addDestination(state, label);
           data.destinationId = dest.id;
           saveState(state);

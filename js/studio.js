@@ -11,6 +11,7 @@ import { UI } from './copy.js';
 // J1 découpe étape 1 (Nour, R1 §1.4) : el() dupliqué à l'identique avec
 // celui de ui.js, dédupliqué dans ui/dom.js dont les deux importent.
 import { el } from './ui/dom.js';
+import { askConfirm, askText } from './ui/sheet.js';
 // J1 découpe étape 3 (Nour, R1 §1.3) : registre de navigation plutôt qu'un
 // import() dynamique de ui.js (qui cassait le cycle statique en le
 // reportant à l'exécution, au prix d'une latence au pire moment : un tap
@@ -576,9 +577,13 @@ function buildDefaultsCard(profile) {
       ),
       el('button', {
         class: 'pill',
-        onclick: () => {
-          const label = prompt(UI.preview_destination_prompt);
-          if (!label || !label.trim()) return;
+        onclick: async () => {
+          const label = await askText({
+            title: UI.preview_destination_prompt,
+            placeholder: UI.preview_destination_placeholder,
+            confirmLabel: UI.preview_destination_save,
+          });
+          if (!label) return;
           const dest = addDestination(studioState, label);
           profile.defaults.destinationId = dest.id;
           autosave();
@@ -632,8 +637,14 @@ function renderStudio() {
   const deleteProfileBtn = studioState.profiles.length > 1
     ? el('button', {
         class: 'btn btn--ghost', style: 'font-size:13px; opacity:0.7',
-        onclick: () => {
-          if (!confirm(`${UI.studio_delete_profile} ?`)) return;
+        onclick: async () => {
+          const ok = await askConfirm({
+            title: UI.studio_delete_confirm,
+            confirmLabel: UI.studio_delete_yes,
+            cancelLabel: UI.studio_delete_no,
+            danger: true,
+          });
+          if (!ok) return;
           studioState.profiles = studioState.profiles.filter((p) => p.id !== studioActiveId);
           studioActiveId = studioState.profiles[0].id;
           if (studioState.activeProfileId !== studioActiveId

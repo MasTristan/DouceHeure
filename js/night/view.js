@@ -5,6 +5,7 @@ import { el, wordmark, toast } from '../ui/dom.js';
 import { render, setScreen } from '../ui/shell.js';
 import { pick, UI } from '../copy.js';
 import { createConfirmControl } from '../confirm-control.js';
+import { askConfirm } from '../ui/sheet.js';
 import { clock } from '../clock.js';
 import { loadState, saveState, getProfile, getActiveProfile } from '../store.js';
 import * as audio from '../audio.js';
@@ -24,11 +25,20 @@ export function renderNight() {
 
   // B3 : le geste de sortie du chevet (appui tenu 1 s) passe par la même
   // machine d'état que le reste de l'app (confirm-control.js), ce qui lui
-  // offre gratuitement les chemins clavier et assistif. Le confirm() natif
-  // reste hors périmètre de ce correctif (remonté en J1, DEC-03).
+  // offre gratuitement les chemins clavier et assistif. DEC-03 : le
+  // confirm() natif a laissé place à la feuille, qui hérite de la scène
+  // Nuit et n'éblouit donc pas à 3 h du matin. Le focus part sur "Rester" :
+  // à cette heure-là, le renoncement doit être le geste le plus facile.
   const quitControl = createConfirmControl({
     holdMs: 1000,
-    onConfirm: () => { if (confirm(UI.bedside_quit_confirm)) nightNav.stopNight(true); },
+    onConfirm: async () => {
+      const ok = await askConfirm({
+        title: UI.bedside_quit_confirm,
+        confirmLabel: UI.bedside_quit_yes,
+        cancelLabel: UI.bedside_quit_no,
+      });
+      if (ok) nightNav.stopNight(true);
+    },
     now: clock.now, setTimeoutFn: clock.setTimeout, clearTimeoutFn: clock.clearTimeout,
   });
 

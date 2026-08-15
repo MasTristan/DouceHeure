@@ -2,7 +2,7 @@
 // Cache versionné explicite (spec v2 §17) : app 100 % offline après
 // premier chargement, polices auto-hébergées comprises.
 
-const VERSION = 'v2.3.1'; // correctif : direction de flex manquante sur .studio-step
+const VERSION = 'v2.4.0'; // J1 etape 8 : la feuille de confirmation remplace les dialogues natifs
 const CACHE = `douce-heure-${VERSION}`;
 
 const ASSETS = [
@@ -36,6 +36,7 @@ const ASSETS = [
   './js/copy.js',
   './js/social.js',
   './js/ui/dom.js',
+  './js/ui/sheet.js',
   './js/ui/shell.js',
   './js/ui/nav.js',
   './js/ui/gesture.js',

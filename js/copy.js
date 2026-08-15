@@ -166,6 +166,12 @@ export const UI = {
 
   wordmark: 'Douce heure',
 
+  // Feuille de confirmation (DEC-03) · remplace les dialogues natifs du
+  // navigateur. Le libellé de validation est toujours propre à la question
+  // posée ("Quitter", "Remplacer", "Supprimer") : jamais un "OK" qui oblige
+  // à relire le titre pour savoir ce qu'on valide.
+  sheet_cancel: 'Annuler',
+
   // Onboarding (spec v2 §15)
   ob1_headline: 'Douce heure ne te presse pas.',
   ob1_subline: 'Elle marche à ton rythme, et apprend le tien.',
@@ -217,6 +223,8 @@ export const UI = {
   preview_destination_none: 'Sans destination',
   preview_destination_add: '+ Nouvelle destination',
   preview_destination_prompt: 'Un nom pour cette destination ?',
+  preview_destination_placeholder: 'Le bureau, la crèche, chez Sam',
+  preview_destination_save: 'Ajouter',
   preview_sequence_label: 'Le déroulé',
   preview_wakelock_notice: "L'écran restera allumé pendant le guidage. Pose le téléphone où tu le vois.",
   preview_cta: "C'est parti",
@@ -326,6 +334,9 @@ export const UI = {
   studio_default_destination: 'Destination habituelle',
   studio_preview: 'Aperçu du plan',
   studio_delete_profile: 'Supprimer ce départ',
+  studio_delete_confirm: 'Supprimer ce départ ?',
+  studio_delete_yes: 'Supprimer',
+  studio_delete_no: 'Garder',
   studio_back: 'Retour',
 
   // Réglages
@@ -353,6 +364,8 @@ export const UI = {
   settings_export: 'Exporter mes données',
   settings_import: 'Importer des données',
   settings_import_confirm: 'Remplacer toutes les données actuelles ?',
+  settings_import_body: 'Tes départs, tes destinations et ce que j\'ai appris seront remplacés par le fichier.',
+  settings_import_yes: 'Remplacer',
   settings_import_ok: 'Données importées.',
   settings_import_bad: 'Fichier non reconnu. Rien n\'a été modifié.',
   settings_shortcuts_title: 'Automatiser avec Raccourcis iOS',
