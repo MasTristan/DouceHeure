@@ -29,7 +29,7 @@ spec Pro Max v2 (référence de détail).
 | J1 | `S1-socle-de-confiance.md`, `S2-le-geste.md` | CI, filet, extraction, découpe, dialogues natifs | clos (`S1-statut.md`) |
 | J2 | `S3-la-premiere-semaine.md` | Ne plus demander une durée, retourner le jour 1 | livré (`S3-statut.md`) |
 | J3 | `S4-le-moteur.md` | Composition, variance a priori, estimateur robuste | livré (`S4-statut.md`) |
-| J4 | `S5-le-corps.md` | Dynamic Type, feuille définitive, nuit et appareil réels | à faire |
+| J4 | `S5-le-corps.md` | Dynamic Type, feuille définitive, nuit et appareil réels | articles 1 à 5 livrés (`S5-statut.md`), recette appareil à faire |
 
 ## Ce qu'il faut savoir avant de toucher au code
 

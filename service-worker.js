@@ -2,7 +2,7 @@
 // Cache versionné explicite (spec v2 §17) : app 100 % offline après
 // premier chargement, polices auto-hébergées comprises.
 
-const VERSION = 'v2.6.0'; // J3 : le moteur merite son nom (variances composees, a priori, estimateur robuste)
+const VERSION = 'v2.7.0'; // J4 : Dynamic Type, contrastes verifies, chevet actionnable, geste annonce
 const CACHE = `douce-heure-${VERSION}`;
 
 const ASSETS = [

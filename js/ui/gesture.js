@@ -13,7 +13,8 @@
 // Switch Control, dont l'activation ne produit pas de maintien mesurable),
 // et tap (option de motricité, DEC-08, pas une réponse d'accessibilité).
 
-import { el } from './dom.js';
+import { el, announce } from './dom.js';
+import { UI } from '../copy.js';
 import { createConfirmControl } from '../confirm-control.js';
 import { clock } from '../clock.js';
 import * as haptics from '../haptics.js';
@@ -53,7 +54,12 @@ export function holdButton({ label, onConfirm, mode, cls = '' }) {
     }, [el('span', { class: 'hold-btn__label' }, label)]);
   }
 
-  const btn = el('button', { class: `hold-btn ${cls}`, 'aria-label': label }, [
+  // S5 article 5 · L'indice d'activation en deux temps est porté par le
+  // bouton lui-même : une technologie d'assistance l'annonce avec le nom
+  // du bouton, avant le premier essai, plutôt qu'après coup.
+  const btn = el('button', {
+    class: `hold-btn ${cls}`, 'aria-label': label, 'aria-description': UI.gesture_assist_hint,
+  }, [
     el('span', { class: 'hold-btn__fill', 'aria-hidden': 'true' }),
     el('span', { class: 'hold-btn__label' }, label),
   ]);
@@ -63,6 +69,10 @@ export function holdButton({ label, onConfirm, mode, cls = '' }) {
   // après une confirmation déjà survenue : pas de "rebond" après succès).
   let holdPending = false;
 
+  // Aucune annonce à la validation : l'appelant annonce déjà le nouvel
+  // état (speakStep, live/controller.js). Deux annonces coup sur coup au
+  // moment où la personne enchaine sur l'étape suivante seraient du bruit,
+  // et le bruit est précisément ce dont souffre le public visé.
   function fireConfirm() {
     holdPending = false;
     holdActive = false;
@@ -74,11 +84,13 @@ export function holdButton({ label, onConfirm, mode, cls = '' }) {
   const control = createConfirmControl({
     onConfirm: fireConfirm,
     onArm: () => {
-      // B3 : chemin assistif armé, pas encore confirmé. Retour discret ;
-      // le texte prononcé/annoncé définitif reste à écrire dans copy.js
-      // (S2-le-geste.md §7, hors périmètre de ce correctif).
+      // B3 · Chemin assistif armé, pas encore confirmé. S5 article 5 :
+      // l'état armé se voit (is-armed) ET s'entend. Sans l'annonce, une
+      // personne sous VoiceOver active, n'obtient rien, et n'a aucun moyen
+      // de savoir que l'app attend une seconde activation.
       haptics.buzz('tap');
       btn.classList.add('is-armed');
+      announce(UI.gesture_armed);
     },
     now: clock.now, setTimeoutFn: clock.setTimeout, clearTimeoutFn: clock.clearTimeout,
   });
@@ -87,6 +99,10 @@ export function holdButton({ label, onConfirm, mode, cls = '' }) {
     if (!holdPending) return; // déjà confirmé ou jamais armé : rien à annuler
     holdPending = false;
     holdActive = false;
+    // S5 article 5 · Un appui interrompu n'avance rien et n'écrit rien
+    // (R3). Le dire est le seul moyen, sans voir l'écran, de distinguer
+    // « j'ai relâché trop tôt » de « l'app ne répond pas ».
+    announce(UI.gesture_released);
     btn.classList.remove('is-holding');
     btn.classList.add('is-spring');
     setTimeout(() => btn.classList.remove('is-spring'), 300);

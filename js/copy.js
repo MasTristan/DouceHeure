@@ -244,6 +244,13 @@ export const UI = {
   // Live
   live_current_label: 'En ce moment',
   live_next_prefix: 'ensuite ·',
+  // J4 (S5 article 5) · Les chaines du geste, dites au moment ou la
+  // personne agit. ADR-003 s'applique : elles ne disent jamais rien de
+  // l'etat de la connaissance du modele. Jour 1 et jour 30 restent
+  // indiscernables pendant le guidage.
+  gesture_armed: 'Encore une fois pour confirmer',
+  gesture_released: 'Appui relâché. Rien n\'a bougé.',
+  gesture_assist_hint: 'Active deux fois pour confirmer',
   live_hold_hint: 'Maintiens pour confirmer',
   live_tap_hint: 'Touche pour confirmer',
   live_confirm: (next) => next ? `C'est fait · ${next}` : "C'est fait",
@@ -316,6 +323,13 @@ export const UI = {
   bedside_cta: 'Bonne nuit',
   bedside_cancel: 'Pas ce soir',
   bedside_night_hint: 'Appui long pour quitter',
+  // J4 (S5 articles 4 et 5) · Le mode chevet devient actionnable
+  // autrement qu'au glissement de doigt. Ces chaines sont dites en pleine
+  // nuit : elles nomment ce que fait le geste, rien d'autre (ADR-003).
+  bedside_now: (time) => `Il est ${time}`,
+  bedside_brightness: 'Luminosité',
+  bedside_brightness_hint: 'Glisse, ou flèches haut et bas',
+  bedside_quit_action: 'Quitter le chevet',
   bedside_quit_confirm: 'Quitter le mode chevet ?',
   bedside_quit_yes: 'Quitter',
   bedside_quit_no: 'Rester',

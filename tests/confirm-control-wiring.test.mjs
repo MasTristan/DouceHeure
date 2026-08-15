@@ -107,16 +107,35 @@ test('ui/gesture.js : le keydown de holdButton ne confirme plus directement sans
   assert.match(keydownBlock, /e\.repeat|!e\.repeat/, 'aucune reference a e.repeat dans le chemin clavier');
 });
 
-test('night/view.js : le mode chevet (renderNight, renderWakeProposal) expose un element focusable et nomme', () => {
-  for (const fnName of ['renderNight', 'renderWakeProposal']) {
-    const start = nightViewSrc.indexOf(`function ${fnName}`);
-    assert.notEqual(start, -1, `${fnName} introuvable`);
-    const end = nightViewSrc.indexOf('\n}\n', start);
-    const body = nightViewSrc.slice(start, end);
-    assert.match(body, /tabindex:\s*'0'/, `${fnName} n'expose pas d'element focusable`);
-    assert.match(body, /'aria-label':/, `${fnName} n'expose pas de nom accessible`);
-    assert.match(body, /role:\s*'button'/, `${fnName} n'expose pas de role actionnable`);
-  }
+// J4 (S5 article 4) · Ce test exigeait role="button" + tabindex sur le
+// <main> de renderNight. C'etait le correctif minimal de J0 : rendre
+// l'ecran actionnable. Il avait un effet de bord que personne n'avait vu :
+// un <main> annonce comme un bouton nomme « Quitter le mode chevet ? »
+// n'expose plus son CONTENU, donc une personne aveugle en mode chevet ne
+// pouvait savoir ni l'heure qu'il est, ni a quelle heure elle serait
+// reveillee. La cible a change, et elle est plus exigeante.
+test('night/view.js : l\'ecran de reveil reste actionnable et nomme', () => {
+  const start = nightViewSrc.indexOf('function renderWakeProposal');
+  const body = nightViewSrc.slice(start, nightViewSrc.indexOf('\n}\n', start));
+  assert.match(body, /tabindex:\s*'0'/, 'l\'ecran de reveil n\'expose pas d\'element focusable');
+  assert.match(body, /'aria-label':/, 'l\'ecran de reveil n\'expose pas de nom accessible');
+  assert.match(body, /role:\s*'button'/, 'l\'ecran de reveil n\'expose pas de role actionnable');
+});
+
+test('night/view.js : l\'ecran de nuit expose des controles, pas un ecran-bouton', () => {
+  const start = nightViewSrc.indexOf('function renderNight');
+  const body = nightViewSrc.slice(start, nightViewSrc.indexOf('function renderWakeProposal'));
+
+  // Le <main> ne doit plus se declarer bouton : sinon son contenu cesse
+  // d'etre lu comme du contenu.
+  const main = body.slice(body.indexOf("el('main'"), body.indexOf('}, ['));
+  assert.doesNotMatch(main, /role:\s*'button'/,
+    'un <main> annonce comme bouton masque l\'heure et l\'heure de reveil aux lecteurs d\'ecran');
+
+  // Et il doit exposer deux controles atteignables autrement qu'au doigt.
+  assert.match(body, /role:\s*'slider'/, 'le reglage de luminosite n\'est atteignable qu\'au glissement');
+  assert.match(body, /'aria-valuenow'/, 'le reglage de luminosite n\'annonce pas sa valeur');
+  assert.match(body, /UI\.bedside_quit_action/, 'la sortie du chevet n\'a pas de commande explicite');
 });
 
 test('night/view.js : la sortie du chevet ne passe plus par un confirm() natif (DEC-03)', () => {
